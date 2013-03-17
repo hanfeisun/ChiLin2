@@ -175,23 +175,41 @@ def step4_prepare_macs2_peakcall(workflow, conf):
                      "keep_dup": 1,
                      "shiftsize":73},
             name= "macs2_callpeak_merged"))
+    
     macs2_on_merged.update(param=conf.items("macs2"))
+    
 
+    ## filter bdg file to remove over-border coordinates
+    bdg_trim_control = attach_back(workflow,
+                           ShellCommand(
+            '{tool} intersect -a {input} -b {param[chrom_bed]} -wa -f 1.00 > {output}',
+            tool = "bedtools",
+            input = conf.target_prefix + "_control_lambda.bdg",
+            output = conf.target_prefix + "_control_lambda.bdg.tmp",
+            param = {'chrom_bed': conf.get("lib", "chrom_bed")},
+            name = "bedGraph filtering"
+            ))
+
+    ## For bedGraphToBigwiggle bugs, we need to remove coordinates outlier
+    bdg_trim_treat = bdg_trim_control.clone
+    bdg_trim_treat.input = conf.target_prefix + "_treat_pileup.bdg"
+    bdg_trim_treat.output = conf.target_prefix + "_treat_pileup.bdg.tmp"
+    attach_back(workflow, bdg_trim_treat)
+    
     bdg2bw_treat = attach_back(workflow,
         ShellCommand(
             "{tool} {input[bdg]} {input[chrom_len]} {output[bw]}",
             tool="bedGraphToBigWig",
-            input={"bdg": conf.target_prefix + "_control_lambda.bdg",
+            input={"bdg": conf.target_prefix + "_control_lambda.bdg.tmp",
                    "chrom_len": conf.get("lib", "chrom_len")},
             output={"bw": conf.target_prefix + "_control.bw"},
             name= "bdg_to_bw"))
 
     # prototype used here to do the similar thing on treatment file
     bdg2bw_control = bdg2bw_treat.clone
-    bdg2bw_control.input["bdg"] = conf.target_prefix + "_treat_pileup.bdg"
+    bdg2bw_control.input["bdg"] = conf.target_prefix + "_treat_pileup.bdg.tmp"
     bdg2bw_control.output["bw"] = conf.target_prefix + "_treat.bw"
     attach_back(workflow, bdg2bw_control)
-
 
 def step4_prepare_macs2_peakscall_on_rep(workflow, conf):
     # Though macs command already exists, I choose not to use prototype here
@@ -214,26 +232,68 @@ def step4_prepare_macs2_peakscall_on_rep(workflow, conf):
                 name= "macs2_callpeak_rep"))
         macs2_on_rep.update(param=conf.items("macs2"))
 
-        attach_back(workflow,
-            ShellCommand(
+        ## For bedGraphToBigwiggle bugs, we need to remove coordinates outlier
+        ## filter bdg file to remove over-border coordinates
+        bdg_trim_controlrep = attach_back(workflow,
+                                          ShellCommand(
+                '{tool} intersect -a {input} -b {param[chrom_bed]} -wa -f 1.00 > {output}',
+                tool = "bedtools",
+                input = target + "_control_lambda.bdg",
+                output = target + "_control_lambda.bdg.tmp",
+                param = {'chrom_bed': conf.get("lib", "chrom_bed")},
+                name = "bedGraph replicate filtering"
+                ))
+        bdg_trim_treatrep = bdg_trim_controlrep.clone
+        bdg_trim_treatrep.input = target + "_treat_pileup.bdg"
+        bdg_trim_treatrep.output = target + "_treat_pileup.bdg.tmp"
+        attach_back(workflow, bdg_trim_treatrep)
+        
+        bdg2bw_treatrep = attach_back(workflow,
+                                      ShellCommand(
                 "{tool} {input} {param[chrom_len]} {output}",
                 tool="bedGraphToBigWig",
-                input= target + "_treat_pileup.bdg",
+                input= target + "_treat_pileup.bdg.tmp",
                 output = target + "_treat.bw",
                 param = {"chrom_len": conf.get("lib", "chrom_len")},name= "bdg_to_bw"))
 
+        # prototype used here to do the similar thing on treatment file
+        bdg2bw_controlrep = bdg2bw_treatrep.clone
+        bdg2bw_controlrep.input = target + "_treat_pileup.bdg.tmp"
+        bdg2bw_controlrep.output = target + "_treat.bw"
+        attach_back(workflow, bdg2bw_controlrep)
 
 def step4_prepare_macs2_venn_on_rep(workflow, conf):
+    # awk and bedClip to remove outlier for venn and correlation plot
+    for _, target in conf.treatment_map:
+        bed_filter = attach_back(workflow,
+                ShellCommand(
+                "{tool} '{{if ($2 >= 0 && $2 < $3) print}}' {input} > {output}",
+                tool = "awk",
+                input = target + "_peaks.bed",
+                output = target + "_peaks.bed.tmp",
+                name = "filter bed files"))
+
+        # prototype used here to do the similar thing on bedclip
+        bedclip = attach_back(workflow,
+                              ShellCommand(
+                              template = "{tool} {input} {param[chrom_len]} {output}",
+                              tool = "bedClip",
+                              input  = target + "_peaks.bed.tmp",
+                              output = target + "_peaks.bed",
+                              param = {'chrom_len': conf.get_path("lib", "chrom_len")},
+                              name = "bedclip filter"))
+        bedclip.allow_fail = True
+
+
     venn_on_peaks = attach_back(workflow,
         ShellCommand(
             "{tool} -t Overlap_of_Replicates {param[beds]} && \
             mv venn_diagram.png {output}",
             tool = "venn_diagram.py",
-            input = [target + "_peaks.bed" for _, target in conf.treatment_map],
+            input = [target + "_peaks.bed.tmp" for _, target in conf.treatment_map],
             output = conf.target_prefix + "venn.png", name= "venn_diagram"))
     venn_on_peaks.param = {"beds": " ".join(venn_on_peaks.input)}
     venn_on_peaks.allow_fail = True
-
 
 def step4_prepare_macs2_cor_on_rep(workflow, conf):
 
@@ -342,11 +402,11 @@ def step5_prepare_mdseqpos_annotation(workflow, conf):
         )).update(param = conf.items("seqpos"))
     attach_back(workflow,
         ShellCommand(
-            "{tool} -r -q {input} {output}",
-            "zip",
+            "{tool} {input} {output}",
+            "mv",
             input = "results",
-            output = conf.target_prefix + "_seqpos.zip",
-            name= "compressed"
+            output = conf.target_prefix + "_seqpos",
+            name= "mv seqpos"
         ))
 def step6_prepare_report_summary(workflow, conf):
     attach_back(workflow,
