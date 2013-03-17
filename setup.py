@@ -3,7 +3,7 @@ from distutils.core import setup
 setup(
     name='chilin2',
     version='0.1',
-    packages=['chilin2', 'chilin2.python_templates', 'test'],
+    packages=['chilin2', 'chilin2.python_templates'],
     url='',
     license='MIT',
     author='Hanfei Sun, Shenglin Mei, Qian Qin ',
