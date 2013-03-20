@@ -4,7 +4,6 @@ separate latex template to several object
 from jinja2 import Environment, FileSystemLoader, PackageLoader
 from pyflow.command import AbstractCommand
 
-
 env = Environment(loader = FileSystemLoader("/"),
     block_start_string = '\BLOCK{',
     block_end_string = '}',
@@ -40,3 +39,4 @@ class JinjaTemplateCommand(AbstractCommand):
         print("Rendering Latex part %s" % self.name, self.template)
         return True
 
+    

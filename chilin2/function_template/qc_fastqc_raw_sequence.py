@@ -33,17 +33,22 @@ def _python_fastqc_parse(input, output=None, param=None):
     return {"sequence_length": sequence_length,
             "median": median}
 
-
-def python_fastqc_dist_draw(input={"db": "", "fastqc_summary_list": [], "R_template": ""},
-                            output={"rfile": "", "pdf": ""},
-                            param={"ids": []}):
-    param.update({"sequence_length": [], "medians": []})
+def python_fastqc_dist_draw(input={"db": "", "fastqc_summary_list": [], "R_template": "", "latex_template": ""},
+                            output={"rfile": "", "latex_frag": "", "pdf": ""},
+                            param={"ids": [], "id": ""}):
+    param.update({"sequence_length": [], "medians": [], "fastqc_summary" : []})
+    
     for a_summary in input["fastqc_summary_list"]:
         parsed_summary = _python_fastqc_parse(input=a_summary)
         param["medians"].append(parsed_summary["median"])
-
+        param["sequence_length"].append(parsed_summary["sequence_length"])
+    
+    for j in range(len(param["medians"])):
+        fastqc_summary = ['%s' % input["fastqc_summary_list"][j], '%s' % str(param["sequence_length"][j]),'%s' % str(param["medians"][j])]
+        param["fastqc_summary"].append(fastqc_summary)
+        
     qc_db = sqlite3.connect(input["db"]).cursor()
-    qc_db.execute("select median_quality from fastqc_info")
+    qc_db.execute("SELECT median_quality FROM fastqc_info")
     history_data = [float(i[0]) for i in qc_db.fetchall()]
 
     fastqc_R = JinjaTemplateCommand(
@@ -57,13 +62,29 @@ def python_fastqc_dist_draw(input={"db": "", "fastqc_summary_list": [], "R_templ
                'ylab': 'fn(sequence quality score)',
                "pdf": output["pdf"],
                "need_smooth_curve": True})
+    
     fastqc_R.invoke()
-
+    
     with open(output["rfile"], "w") as f:
         f.write(fastqc_R.result)
+    f.close()
 
     ThrowableShellCommand('Rscript {input}', input=output["rfile"]).invoke()
+    
+    latex = JinjaTemplateCommand(
+        template = input['latex_template'],
+        param = {"section_name": "sequence_quality",
+                 "path": output["pdf"],
+                 "qc_report_begin":True,
+                 "fastqc_table": param['fastqc_summary'],
+                 "fastqc_graph": output["pdf"],
+                 'prefix_dataset_id': param['id']})
 
+    latex.invoke()
+
+    with open(output["latex_frag"], "w") as f:
+        f.write(latex.result)
+    f.close()
     return {}
 
 

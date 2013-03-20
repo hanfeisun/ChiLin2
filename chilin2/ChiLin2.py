@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-#!/usr/bin/env python3
 
 import os
 import sys
@@ -12,10 +11,11 @@ from pkg_resources import resource_filename
 from chilin2.function_template.qc_bowtie import qc_bowtie_summary_draw
 from chilin2.function_template.qc_fastqc_raw_sequence import python_fastqc_dist_draw
 import re
-from chilin2.function_template.qc_macs2 import qc_non_redundant_rate_draw
+#from chilin2.function_template.qc_macs2 import qc_non_redundant_rate_draw
 
 ChiLinQC_db = resource_filename("chilin2", "db/ChiLinQC.db")
 R_cumulative_template = resource_filename("chilin2", "jinja_template/R_culmulative_plot.R.jinja2")
+Latex_template = resource_filename("chilin2", "jinja_template/Latex.jinja2")
 
 
 class FriendlyArgumentParser(argparse.ArgumentParser):
@@ -103,12 +103,14 @@ def step2_prepare_raw_QC(workflow, conf):
             python_fastqc_dist_draw,
             input = {"db": ChiLinQC_db,
                      "fastqc_summary_list": [target + "_fastqc/fastqc_data.txt" for _,target in conf.sample_map],
-                     "R_template": R_cumulative_template},
+                     "R_template": R_cumulative_template,
+                     "latex_template": Latex_template},
             output = {"rfile": conf.target_prefix + "_fastqc_draw.R",
+                      "latex_frag": conf.target_prefix + "_fastqc.tex",
                       "pdf": conf.target_prefix + "_fastqc_draw.pdf"},
             # TODO： Change ids to basename
-            param = {"ids" : [os.path.basename(target) for _, target in conf.sample_map]}))
-
+            param = {"ids" : [os.path.basename(target) for _, target in conf.sample_map],
+                     "id": conf.id}))
 
 def step3_prepare_bowtie_map(workflow, conf):
     for raw, target in conf.sample_map:
