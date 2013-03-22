@@ -1,6 +1,7 @@
 """
 separate latex template to several object
 """
+import subprocess
 from jinja2 import Environment, FileSystemLoader, PackageLoader
 from pyflow.command import AbstractCommand
 
@@ -39,4 +40,14 @@ class JinjaTemplateCommand(AbstractCommand):
         print("Rendering Latex part %s" % self.name, self.template)
         return True
 
-    
+def write_into(jinja_template, file_path):
+    jinja_template.invoke()
+    with open(file_path, "w") as f:
+        f.write(jinja_template.result)
+
+def write_and_run_Rscript(jinja_template_r, file_path):
+    write_into(jinja_template_r, file_path)
+    subprocess.call("Rscript %s" %file_path)
+
+
+
