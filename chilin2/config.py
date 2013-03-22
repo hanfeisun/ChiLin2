@@ -42,20 +42,20 @@ class ChiLinConfig(object):
         return self.get("Basis", "output")
 
     @property
-    def target_prefix(self):
+    def prefix(self):
         return os.path.join(self.target_dir, self.id)
 
     @property
-    def treatment_map(self):
-        return list(zip(self._treatment_input, self._treatment_target_prefix))
+    def treatment_pairs(self):
+        return list(zip(self.treatment_raws, self.treatment_targets))
 
     @property
-    def control_map(self):
-        return list(zip(self._control_input, self._control_target_prefix))
+    def control_pairs(self):
+        return list(zip(self.control_raws, self.control_targets))
 
     @property
-    def sample_map(self):
-        return self.treatment_map + self.control_map
+    def sample_pairs(self):
+        return self.treatment_pairs + self.control_pairs
 
     def to_abs_path(self, path):
         abs_path = path
@@ -64,23 +64,40 @@ class ChiLinConfig(object):
         return abs_path
 
     @property
-    def _control_input(self):
+    def control_raws(self):
         return [self.to_abs_path(i.strip()) for i in self.get("Basis", "control").split(",")]
 
     @property
-    def _treatment_input(self):
+    def treatment_raws(self):
         return [self.to_abs_path(i.strip()) for i in self.get("Basis", "treat").split(",")]
 
     @property
-    def _treatment_target_prefix(self):
+    def treatment_targets(self):
         return [os.path.join(self.target_dir,
             self.id + "_treat_rep" + str(num+1)
-        ) for num in range(len(self._treatment_input))]
+        ) for num in range(len(self.treatment_raws))]
 
     @property
-    def _control_target_prefix(self):
+    def control_targets(self):
         return [os.path.join(self.target_dir,self.id + "_control_rep" + str(num+1))
-                for num in range(len(self._control_input))]
+                for num in range(len(self.control_raws))]
+    @property
+    def sample_targets(self):
+        return self.treatment_targets + self.control_targets
 
+
+    def _base(self, path):
+        return os.path.base(path)
+
+    @property
+    def treatment_bases(self):
+        return [self._base(i) for i in self.treatment_targets]
+
+    @property
+    def control_bases(self):
+        return [self._base(i) for i in self.control_targets]
+
+    def sample_bases(self):
+        return [self._base(i) for i in self.sample_targets]
 
 
