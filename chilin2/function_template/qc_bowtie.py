@@ -1,12 +1,8 @@
-import os
 import re
 import sqlite3
 from pyflow.command import ThrowableShellCommand
-from pyflow.helper import fetch
 
-# TODO (Hanfei): group here doesn't work now
-#digit_format = lambda num,sep=",": sep[::-1].join(group(str(num)[::-1],3))[::-1]
-from chilin2.jinja_template_command import JinjaTemplateCommand
+from chilin2.jinja_template_render import JinjaTemplateCommand
 
 def underline_to_space(x):
     if type(x) == str:
