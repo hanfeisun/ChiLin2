@@ -1,4 +1,3 @@
-execfile('../chilin_env/bin/activate_this.py', dict(__file__='../chilin_env/bin/activate_this.py'))
 from chilin2.ChiLin2 import main
 import sys
 
