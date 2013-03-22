@@ -1,8 +1,9 @@
 import os
 import sqlite3
+import math
 from pyflow.command import ShellCommand, ThrowableShellCommand
 
-from chilin2.jinja_template_render import JinjaTemplateCommand
+from chilin2.jinja_template_command import JinjaTemplateCommand
 
 
 # TODO: Check whether _check can be separated
@@ -23,18 +24,19 @@ from chilin2.jinja_template_render import JinjaTemplateCommand
 #        return output
 #
 #
-def _peak_summary_info(input={"macs2_xls_for_each_sample":"","name":""}, output={"latex_SummaryTable":""}, param={"id":""}):
+def _qc_peak_summary_parse(input={"macs2_peaks_xls": ""},
+                              param={"id": ""}):
     """Basic statistic of peak calling result."""
     name = 'dataset'+ param["id"]
-    with open(input["macs2_xls_for_each_sample"],"rU" ) as fhd:
+    with open(input["macs2_peaks_xls"],"rU") as fhd:
         fold_enrichment_list = []
-        q_value_cutoff = "unknown"
         for i in fhd:
             i = i.strip()
             if i.startswith("# qvalue cutoff"):
                 q_value_cutoff = float(i.split('=')[1])
+                continue
 
-            if i.startswith("#") or i.startswith("chr\t"):
+            if i.startswith("#") or i.startswith("chr\t") or not i:
                 continue
 
             fold_enrichment = float(i.split("\t")[7]) #8th column is fold change
@@ -47,60 +49,44 @@ def _peak_summary_info(input={"macs2_xls_for_each_sample":"","name":""}, output=
         fold_greater_than_10_peaks_count = len(fold_greater_than_10_peaks)
     peaks_summary = [name, q_value_cutoff, total_peak_count,fold_greater_than_10_peaks_count]
 
-    latex_summary_table = {"desc":'Peaks number with fold change greater than 10X  ',
-                         "data": name,
-                         "value": fold_greater_than_10_peaks_count,
-                         "cutoff":1000}
+#    latex_summary_table = {"desc":'Peaks number with fold change greater than 10X  ',
+#                         "data": name,
+#                         "value": fold_greater_than_10_peaks_count,
+#                         "cutoff":1000}
 
-    latex_summary_table = _check(latex_summary_table,output)
-    with open(output["latex_SummaryTable"],"a+") as f:
-        f.write('\t'.join(latex_summary_table)+'\n')
-    return {"peak_summary_table":peaks_summary,"fold10":fold_greater_than_10_peaks_count }
+    return {"peaks_summary":peaks_summary,"fold_gt_10_peaks_count":fold_greater_than_10_peaks_count}
 
-#def high_confidentPeaks_info(input={"macs2_xls_for_each_sample":"","db": ""},
-#                            output={"rfile": "", "pdf": "","latex_SummaryTable":""},
-#                            param = {"ids": []},
-#                            **args):
-#    """
-#    cummulative percentage of peaks foldchange great than 10
-#    """
+
+def qc_high_confident_peaks_draw(input={"macs2_peaks_xls": "", "db": "", "R_template": ""},
+                             output={"rfile": "", "pdf": ""},
+                             param={"id": ""}):
+    """ cummulative plot of peaks fold change greater than 10"""
 #    param = fetch(param)
-#    peaks_summary_result = _peak_summary_info(input,output)
-#    name = param["ids"]
-#    db = sqlite3.connect(input["db"]).cursor()
-#    db.execute("select peak_fc_10 from peak_calling_tb")
-#    highpeaks_history = db.fetchall()
-#    historyData = [str(math.log(i[0]+0.001,10)) for i in highpeaks_history if i[0] > 0]
-#    historyData = ','.join(historyData)
-#
-#    lg_10 = round(math.log(peaks_summary_result["fold10"],10),3)
-#    Rrender = {'histroyData':historyData,
-#                'value':lg_10,
-#                'name':"'ratio of fold change upper than 10'",
-#                'cutoff':3,
-#                'pdfName':output["pdf"],
-#                'main':'High confidence peaks distribution',
-#                'xlab':'log(Number of Peaks fold upper than 10)',
-#                'ylab':'fn(log(Number of Peaks fold upper than 10))',
-#                'other':True}
-#    highpeaksR = JinjaCommand(name="highpeaksQC", template="Rtemplate.tex", Rrender)
-#    if highpeaksR.invoke():
-#        content = highpeaksR.result().replace('%','\\%')
-#    with open(output["rfile"], 'w') as f:
-#        f.write(content)
-#    os.system('Rscript %s' % output["rfile"])
-#    latex_summary_table = {"desc":'Overlap with DHSs  ',
-#                         "data":'%s'%name,
-#                         "value":'%f'%dhs_ratio,
-#                         "cutoff":0.8}
-#
-#    latex_summary_table = _check(latex_summary_table,output)
-#    with open(output["latex_SummaryTable"],"a+") as f:
-#        f.write('\t'.join(latex_summary_table)+'\n')
-#    return {'PeakcallingQC_check':True,'peak_summary_table':peaks_summary_result["peaks_summary"],
-#            'high_confident_peak_graph':output["pdf"]}
-#
-#
+    peaks_summary_result = _qc_peak_summary_parse(input=input, param = param)
+    name = [param["id"]]
+    db = sqlite3.connect(input["db"]).cursor()
+    db.execute("select peak_fc_10 from peak_calling")
+    historyData = [math.log(i[0]+0.001,10) for i in db.fetchall() if i[0] > 0]
+
+    high_confident_peaks_R = JinjaTemplateCommand(name="highpeaksQC",
+        template=input["R_template"],
+        param={'historic_data': historyData,
+               'current_data': [math.log(peaks_summary_result["fold_gt_10_peaks_count"]+0.01,10)],    #
+               'ids': name,
+               'cutoff': 3,
+               'main': 'High confidence peaks distribution',
+               'xlab': 'log(Number of Peaks fold greater than 10)',
+               'ylab': 'fn(log(Number of Peaks fold greater than 10))',
+               "pdf": output["pdf"]})
+
+    high_confident_peaks_R.invoke()
+    with open(output["rfile"], 'w') as f:
+        f.write(high_confident_peaks_R.result)
+
+    ThrowableShellCommand(template = 'Rscript {input}', input= output["rfile"]).invoke()
+
+    return {}
+
 
 
 

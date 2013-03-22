@@ -11,5 +11,5 @@ setup(
     description='',
     scripts = ["chilin2/ChiLin2.py"],
     requires=["pyflow"],
-    package_data = {"chilin2" : ["db/ChiLinQC.db", "jinja_template/*.jinja2"]}
+    package_data = {"chilin2" : ["db/ChiLinQC.db", "jinja_template/*.jinja2","db/*.txt"]}
 )

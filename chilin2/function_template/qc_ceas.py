@@ -1,26 +1,23 @@
 import re
 import os
 
-def redraw_ceas_graph(input={"peaksxls": "","ceas_rscript":""},
-                output={"rfile": "", "peakheight_and_pie_pdf": "","metagene_dist_pdf":""}):
-
-    
+def qc_redraw_ceas_graph(input={"macs2_peaks_xls": "", "ceas_rscript": ""},
+                         output={"rfile": "", "peakheight_and_pie_pdf": "", "metagene_dist_pdf": ""},param = None):
     """ Describe peaks' distribution and relative position.
-    input: the xls file and
-    output: rfile and pdf
     """
-    
+
     list_fold_change = []
-    with open(input["peakxls"]) as xls_file:
+    with open(input["macs2_peaks_xls"]) as xls_file:
         for line in xls_file:
             line = line.strip()
             if line.startswith("#") or not line:
                 continue
 
             if line.startswith("chr\t"):
-                line_splited = line.split("\t")
-                fold_change = float(line_splited[7]) # The 8th column is fold change
-                list_fold_change.append(fold_change)
+                continue
+            line_splited = line.split("\t")
+            fold_change = float(line_splited[7]) # The 8th column is fold change
+            list_fold_change.append(fold_change)
 
     foldchange_string = ','.join(map(str, list_fold_change))
 
@@ -66,6 +63,9 @@ def redraw_ceas_graph(input={"peaksxls": "","ceas_rscript":""},
         r_file.write("nf <- layout(matrix(c(1,2,3,3), 2, 2, byrow=TRUE), width= c(1,1),height=c(1,1),respect=TRUE)\n")
         r_file.write(metagene_dist_r_codes)
         r_file.write('dev.off()\n')
+
+    os.system('Rscript %s' % output["rfile"])
+    return {}
 
     os.system('Rscript %s' % output["rfile"])
     return {'AnnotationQC_check' : True,

@@ -12,13 +12,12 @@ def _euclidian_distance(x,y):
     return distance
 
 # TODO (Shenglin): Why should conservationPDF use here as input?
-def conservation_info(input={"conservationR": "","historical_conservation_cluster_text": ""},
+def qc_conservation_draw(input={"conservationR": "","historical_conservation_cluster_text": ""},
                         output={"rfile": "","pdf": "","latex_SummaryTable":""},
                         param = {"id":""}):
     """
     For TFcenters data 1,2,3 pass, 4,5,6 fail
     For Histone center data 1,2,3,4 pass, 5,6,7,8 fail.
-    self,conservationR,conservationFile,atype
     """
     with open(input["conservationR"]) as conservation_r_file:
         for line in conservation_r_file:
@@ -43,7 +42,7 @@ def conservation_info(input={"conservationR": "","historical_conservation_cluste
     for i in range(len(historyData)):
         temp = historyData[i].strip()
         line = temp.split(' ')
-
+        line = [float(j) for j in line]
         score = _euclidian_distance(value,line)
         scoreList.append(score)
     mindist = scoreList.index(min(scoreList)) # return the index of minimum distance group

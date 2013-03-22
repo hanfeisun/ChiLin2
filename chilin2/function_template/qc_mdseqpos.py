@@ -12,7 +12,7 @@ def _extract_traverse_tree(tree):
     return result_list
 
 # TODO: parse ?
-def mdseqpos_parse_and_filter_by_z_score(input = "" , output="", param = {"z_score_cutoff":-15}):
+def qc_mdseqpos_parse_and_filter_by_z_score(input = "" , output="", param = {"z_score_cutoff":-15}):
     """parrase mdsepose html file"""
     z_score_cutoff = param["z_score_cutoff"]
     seqpos_html_content = open(input).read()
