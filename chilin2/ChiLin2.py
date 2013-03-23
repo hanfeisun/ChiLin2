@@ -159,11 +159,12 @@ def step4_prepare_macs2_peakcall(workflow, conf):
     # I have to set `params` separately as it depends on `input` parameter
     merge_bams_treat.param = {"bams":" ".join(merge_bams_treat.input)}
 
+
     # Here I use `merge_bams_treat` as a prototype to avoid duplication
     merge_bam_control = merge_bams_treat.clone
     merge_bam_control.input = [target+".bam" for target in conf.control_targets]
     merge_bam_control.output = {"merged": conf.prefix + "_control.bam"}
-    merge_bam_control.param = {"bams":" ".join(merge_bams_treat.input)}
+    merge_bam_control.param = {"bams":" ".join(merge_bam_control.input)}
 
     # remember to attach_back into the workflow for prototype
     attach_back(workflow, merge_bam_control)
@@ -223,12 +224,12 @@ def step4_prepare_macs2_peakcall(workflow, conf):
 
     attach_back(workflow, PythonCommand(
         qc_high_confident_peaks_draw,
-        input = {"macs2_peaks_xls": conf.target_prefix + "_peaks.xls",
+        input = {"macs2_peaks_xls": conf.prefix + "_peaks.xls",
                  "R_template": R_cumulative_template,
                  "db": ChiLinQC_db},
-        output = {"rfile": conf.target_prefix + "_high_confident_peak_rate.R",
-                  "pdf": conf.target_prefix + "_high_confident_peak_rate.pdf"},
-        param = {"id": os.path.basename(conf.target_prefix)}
+        output = {"rfile": conf.prefix + "_high_confident_peak_rate.R",
+                  "pdf": conf.prefix + "_high_confident_peak_rate.pdf"},
+        param = {"id": os.path.basename(conf.prefix)}
     ))
 
 
@@ -341,7 +342,7 @@ def step4_prepare_macs2_venn_on_rep(workflow, conf):
     attach_back(workflow,
         PythonCommand(
             qc_replicate_parse,
-            input = {"correlation_R": conf.target_prefix + "_cor.R",
+            input = {"correlation_R": conf.prefix + "_cor.R",
                      "Latex_summary_table": resource_filename("chilin2", "jinja_template/Latex_summary_table_template.jinja2")})
     )
 
@@ -379,9 +380,9 @@ def step4_prepare_macs2_cor_on_rep(workflow, conf):
 #            "{tool} -wa -u  \
 #            -a {input[macs2_peaks_bed]} -b {input[DHS_peaks_bed]} > {output[DHS_overlap_peaks_bed]}",
 #            tool = "intersectBed",
-#            input = {"bed" : conf.target_prefix + "_peaks.bed",
+#            input = {"bed" : conf.prefix + "_peaks.bed",
 #                     "DHS_peaks_bed" :""},
-#            output = ["DHS_overlap_peaks_bed": conf.target_prefix + "_DHSoverlap_peaks_bed" ],
+#            output = ["DHS_overlap_peaks_bed": conf.prefix + "_DHSoverlap_peaks_bed" ],
 #            param = None))
 #
 #def  step5_prepare_velcro_overlap_annotation(workflow, conf):
@@ -390,9 +391,9 @@ def step4_prepare_macs2_cor_on_rep(workflow, conf):
 #            "{tool} -wa -u  \
 #            -a {input[macs2_peaks_bed]} -b {input[velcro_peaks_bed]} > {output[DHS_overlap_peaks_bed]}",
 #            tool = "intersectBed",
-#            input = {"bed" : conf.target_prefix + "_peaks.bed",
+#            input = {"bed" : conf.prefix + "_peaks.bed",
 #                     "DHS_peaks_bed" :""},
-#            output = ["DHS_overlap_peaks_bed": conf.target_prefix + "_DHSoverlap_peaks_bed" ],
+#            output = ["DHS_overlap_peaks_bed": conf.prefix + "_DHSoverlap_peaks_bed" ],
 #    param = None))
 
 
@@ -430,12 +431,12 @@ def step5_prepare_ceas_annotation(workflow, conf):
     attach_back(workflow,
         PythonCommand(
             qc_redraw_ceas_graph,
-            input = {"macs2_peaks_xls": conf.target_prefix + "_peaks.xls",
-                     "ceas_rscript": conf.target_prefix + "_ceas.R",
+            input = {"macs2_peaks_xls": conf.prefix + "_peaks.xls",
+                     "ceas_rscript": conf.prefix + "_ceas.R",
                      "Latex_summary_table": resource_filename("chilin2", "jinja_template/Latex_summary_table_template.jinja2")},
             output = {"rfile":"_qc_ceas.R",
-                      "peakheight_and_pie_pdf": conf.target_prefix + "_peakheight_and_pie.pdf",
-                      "metagene_dist_pdf":conf.target_prefix +  "_metagene_dist.pdf"})
+                      "peakheight_and_pie_pdf": conf.prefix + "_peakheight_and_pie.pdf",
+                      "metagene_dist_pdf":conf.prefix +  "_metagene_dist.pdf"})
     )
 
 
@@ -476,11 +477,11 @@ def step5_prepare_phast_conservation_annotation(workflow, conf):
     conservation = attach_back(workflow,
         PythonCommand(
             qc_conservation_draw,
-            input = {"conservationR": conf.target_prefix + "conserv.R",
+            input = {"conservationR": conf.prefix + "conserv.R",
                     "historical_conservation_cluster_text": resource_filename("chilin2", "db/TF_centers.txt")},
-            output = {"rfile": conf.target_prefix + "_qc_conserv_compare.R",
-                      "pdf": conf.target_prefix + "_qc_conserv_compare.pdf"},
-            param = {"atype": conf.get("basis", "type")})
+            output = {"rfile": conf.prefix + "_qc_conserv_compare.R",
+                      "pdf": conf.prefix + "_qc_conserv_compare.pdf"},
+            param = {"atype": conf.get("Basis", "type", "TF")})
     )
 
     conservation.param.update({})
@@ -547,7 +548,7 @@ def create_workflow(args, conf):
         step4_prepare_macs2_venn_on_rep(workflow, conf)
         step4_prepare_macs2_cor_on_rep(workflow, conf)
     step5_prepare_ceas_annotation(workflow, conf)
-    if conf.get('basis', 'species') == "hg19":
+    if conf.get('Basis', 'species') == "hg19":
         pass # TODO
     step5_prepare_phast_conservation_annotation(workflow, conf)
     step5_prepare_mdseqpos_annotation(workflow, conf)
