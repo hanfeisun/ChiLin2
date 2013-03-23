@@ -1,4 +1,4 @@
-from configparser import ConfigParser, NoSectionError
+from configparser import ConfigParser, NoSectionError, NoOptionError
 import os
 
 class ChiLinConfig(object):
@@ -18,8 +18,15 @@ class ChiLinConfig(object):
         """
         self._verbose_level = verbose_level
 
-    def get(self, section, option):
-        return self._conf.get(section, option)
+    def get(self, section, option, default = None):
+        try:
+            return self._conf.get(section, option)
+        except NoOptionError:
+            if default:
+                return default
+            else:
+                raise
+
 
     def get_path(self, section, option):
         return self.to_abs_path(self.get(section, option))
@@ -87,7 +94,7 @@ class ChiLinConfig(object):
 
 
     def _base(self, path):
-        return os.path.base(path)
+        return os.path.basename(path)
 
     @property
     def treatment_bases(self):
