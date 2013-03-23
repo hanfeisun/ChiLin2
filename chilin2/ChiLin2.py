@@ -29,39 +29,48 @@ class FriendlyArgumentParser(argparse.ArgumentParser):
         self.print_help()
         sys.exit()
 
+
 def parse_args(args=None):
     """
     If args is None, argparse will parse from sys.argv
     """
     description = "ChiLin :  ChIP-seq pipeline"
-    parser = FriendlyArgumentParser(description = description)
-    sub_parsers = parser.add_subparsers(help = "sub-command help", dest = "sub_command")
+    parser = FriendlyArgumentParser(description=description)
+    sub_parsers = parser.add_subparsers(help="sub-command help", dest="sub_command")
 
-    template_parser = sub_parsers.add_parser("gen",  help = "generate a template of config file",
-        description = "ChiLin-gen: A config template generator for ChiLin")
-    template_parser.add_argument("-s","--species", choices = ("hg19", "mm9"), required = True)
-    template_parser.add_argument("-t", dest = "atype", choices = ("Dnase", "Histone", "TF"), required = True,
-        help = "the most important option for ChiLin specify the analysis type and the shiftsize {Dnase: 50, Histone and TF:73} of MACS2")
+    template_parser = sub_parsers.add_parser("gen", help="generate a template of config file",
+        description="ChiLin-gen: A config template generator for ChiLin")
+    template_parser.add_argument("-s", "--species", choices=("hg19", "mm9"), required=True)
+    template_parser.add_argument("-t", dest="atype", choices=("Dnase", "Histone", "TF"), required=True,
+        help="the most important option for ChiLin specify the analysis type and the shiftsize {Dnase: 50, Histone and TF:73} of MACS2")
 
-    parser_run = sub_parsers.add_parser("run", help = "run pipeline using a config file",
-        description = "ChiLin-run: Run ChiLin pipeline using a config file")
-    parser_run.add_argument("-c","--config", dest="config", required = True,
-        help = "specify the config file to use", )
-    parser_run.add_argument("-m", dest = "cor_method", default = "mean",choices = ("mean",),
-        help = "specify method for correlation plot")
-    parser_run.add_argument("-p", dest = "top_peaks", type = int, default = 5000,
-        help = "specify peaks number for CEAS")
-    parser_run.add_argument("--threads", dest = "max_threads", type = int, default = 1, choices = range(1,9),
-        help = "How many threads can be used")
+    parser_run = sub_parsers.add_parser("run", help="run pipeline using a config file",
+        description="ChiLin-run: Run ChiLin pipeline using a config file")
+    parser_run.add_argument("-c", "--config", dest="config", required=True,
+        help="specify the config file to use", )
+    parser_run.add_argument("-m", dest="cor_method", default="mean", choices=("mean",),
+        help="specify method for correlation plot")
+    parser_run.add_argument("-p", dest="top_peaks", type=int, default=5000,
+        help="specify peaks number for CEAS")
+    parser_run.add_argument("--threads", dest="max_threads", type=int, default=1, choices=range(1, 9),
+        help="How many threads can be used")
     parser_run.add_argument("-v", "--verbose-level", dest="verbose_level", type=int, default=2)
     parser_run.add_argument("--dry-run", dest="dry_run", action="store_true", default=False)
     parser_run.add_argument("--allow-dangling", dest="allow_dangling", action="store_true", default=False)
     parser_run.add_argument("--resume", dest="resume", action="store_true", default=False)
-    parser_run.add_argument("--debug", help = "debug mode", action = "store_true", default = False)
+    parser_run.add_argument("--debug", help="debug mode", action="store_true", default=False)
     return parser.parse_args(args)
 
-def step1_prepare_groom_sequencing_files(workflow, conf):
+def make_copy_command(orig, dest):
+    return ShellCommand(
+        "cp {input} {output}",
+        input = orig,
+        output = dest,
+        name = "copy")
 
+
+
+def step1_prepare_groom_sequencing_files(workflow, conf):
     # Return the file name pair (raw, target) that can't be groomed
     # If a file is neither a bam nor a fastq, it's returned in a list.
     # This files (maybe BED files) can be captured and processed by other tools later
@@ -71,49 +80,44 @@ def step1_prepare_groom_sequencing_files(workflow, conf):
             attach_back(workflow,
                 ShellCommand(
                     "{tool} -i {input} -fq {output}",
-                    tool = "bamToFastq",
-                    input = raw,
-                    output = target + ".fastq",
-                    name = "groom"))
+                    tool="bamToFastq",
+                    input=raw,
+                    output=target + ".fastq",
+                    name="groom"))
 
         elif re.search(r"\.(fastq|fq)", raw, re.I):
-            attach_back(workflow,
-                ShellCommand(
-                    "cp {input} {output}",
-                    input = raw,
-                    output = target + ".fastq",
-                    name = "groom"))
-
+            attach_back(workflow, make_copy_command(orig = raw, dest= target + ".fastq"))
         else:
             print(raw, " is neither fastq nor bam file. Skip grooming.")
-            not_groomed.append(raw,target)
+            not_groomed.append(raw, target)
     return not_groomed
 
 
 def step2_prepare_raw_QC(workflow, conf):
-
     for target in conf.sample_targets:
         fastqc_run = attach_back(workflow,
             ShellCommand(
                 "{tool} {input} --extract -t {param[threads]} -o {output[target_dir]}",
-                input = target + ".fastq",
-                output = {"target_dir": conf.target_dir,
-                          "summary": target + "_fastqc/fastqc_data.txt"},
-                tool = "fastqc",
-                param = {"threads": 4}))
+                input=target + ".fastq",
+                output={"target_dir": conf.target_dir,
+                        "summary": target + "_fastqc/fastqc_data.txt"},
+                tool="fastqc",
+                param={"threads": 4}))
         fastqc_run.update(param=conf.items("fastqc"))
 
     attach_back(workflow,
         PythonCommand(
             python_fastqc_dist_draw,
-            input = {"db": ChiLinQC_db,
-                     "fastqc_summary_list": [target + "_fastqc/fastqc_data.txt" for target in conf.sample_targets],
-                     "R_template": R_cumulative_template,
-                     "latex_template": Latex_summary_report_template},
-            output = {"rfile": conf.prefix + "_raw_sequence_qc.R",
-                      "latex_section": conf.prefix + "_raw_sequence_qc.tex",
-                      "pdf": conf.prefix + "_raw_sequence_qc.pdf"},
-            param = {"ids" : conf.sample_bases}))
+            input={"db": ChiLinQC_db,
+                   "fastqc_summary_list": [target + "_fastqc/fastqc_data.txt" for target in conf.sample_targets],
+                   "R_template": R_cumulative_template,
+                   "latex_template": Latex_summary_report_template},
+            output={"rfile": conf.prefix + "_raw_sequence_qc.R",
+                    "latex_section": conf.prefix + "_raw_sequence_qc.tex",
+                    "pdf": conf.prefix + "_raw_sequence_qc.pdf"},
+            param={"ids": conf.sample_bases,
+                   "id": conf.id}))
+
 
 def step3_prepare_bowtie_map(workflow, conf):
     for target in conf.sample_targets:
@@ -121,24 +125,24 @@ def step3_prepare_bowtie_map(workflow, conf):
             ShellCommand(
                 "{tool} -p {param[threads]} -S -m {param[max_align]} \
                 {param[genome_index]} {input[fastq]} {output[sam]} 2> {output[bowtie_summary]}",
-                input = {"genome_dir": os.path.dirname(conf.get_path("lib", "genome_index")),
-                         "fastq": target + ".fastq"},
-                output = {"sam": target + ".sam",
-                          "bowtie_summary": target + "_bowtie_summary.txt",},
-                tool = "bowtie",
-                param = {"threads":4,
-                         "max_align":1,
-                         "genome_index": conf.get_path("lib", "genome_index")}))
+                input={"genome_dir": os.path.dirname(conf.get_path("lib", "genome_index")),
+                       "fastq": target + ".fastq"},
+                output={"sam": target + ".sam",
+                        "bowtie_summary": target + "_bowtie_summary.txt", },
+                tool="bowtie",
+                param={"threads": 4,
+                       "max_align": 1,
+                       "genome_index": conf.get_path("lib", "genome_index")}))
 
         bowtie_map.update(param=conf.items("bowtie"))
 
     attach_back(workflow, PythonCommand(qc_bowtie_summary_draw,
-        input = {"all_bowtie_summary": [target + "_bowtie_summary.txt" for target in conf.sample_targets],
-                 "R_template": R_cumulative_template,
-                 "db": ChiLinQC_db},
-        output = {"rfile": conf.prefix + "_mappable_rate.R",
-                  "pdf": conf.prefix + "_mappable_rate.pdf"},
-        param = {"ids": conf.sample_bases}))
+        input={"all_bowtie_summary": [target + "_bowtie_summary.txt" for target in conf.sample_targets],
+               "R_template": R_cumulative_template,
+               "db": ChiLinQC_db},
+        output={"rfile": conf.prefix + "_mappable_rate.R",
+                "pdf": conf.prefix + "_mappable_rate.pdf"},
+        param={"ids": conf.sample_bases}))
 
 
 def step4_prepare_macs2_peakcall(workflow, conf):
@@ -147,66 +151,72 @@ def step4_prepare_macs2_peakcall(workflow, conf):
             ShellCommand(
                 "{tool} view -bt {input[chrom_len]} {input[sam]} -o {output[bam]}",
                 tool="samtools",
-                input={"sam":target + ".sam", "chrom_len": conf.get_path("lib", "chrom_len")},
-                output={"bam":target+ ".bam"}))
+                input={"sam": target + ".sam", "chrom_len": conf.get_path("lib", "chrom_len")},
+                output={"bam": target + ".bam"}))
 
-    merge_bams_treat = attach_back(workflow,
-        ShellCommand(
+    merge_bams_treat = ShellCommand(
             "{tool} merge {output[merged]} {param[bams]}",
-            tool = "samtools",
-            input = [target+".bam" for target in conf.treatment_targets],
-            output= {"merged": conf.prefix + "_treatment.bam"}))
+            tool="samtools",
+            input=[target + ".bam" for target in conf.treatment_targets],
+            output={"merged": conf.prefix + "_treatment.bam"})
     # I have to set `params` separately as it depends on `input` parameter
-    merge_bams_treat.param = {"bams":" ".join(merge_bams_treat.input)}
-
+    merge_bams_treat.param = {"bams": " ".join(merge_bams_treat.input)}
 
     # Here I use `merge_bams_treat` as a prototype to avoid duplication
-    merge_bam_control = merge_bams_treat.clone
-    merge_bam_control.input = [target+".bam" for target in conf.control_targets]
-    merge_bam_control.output = {"merged": conf.prefix + "_control.bam"}
-    merge_bam_control.param = {"bams":" ".join(merge_bam_control.input)}
+    merge_bams_control = merge_bams_treat.clone
+    merge_bams_control.input = [target + ".bam" for target in conf.control_targets]
+    merge_bams_control.output = {"merged": conf.prefix + "_control.bam"}
+    merge_bams_control.param = {"bams": " ".join(merge_bams_control.input)}
 
-    # remember to attach_back into the workflow for prototype
-    attach_back(workflow, merge_bam_control)
+    if len(conf.treatment_targets) > 1:
+        # remember to attach_back into the workflow for prototype
+        attach_back(workflow, merge_bams_treat)
+    else:
+        attach_back(workflow, make_copy_command(merge_bams_treat.input[0], merge_bams_treat.output))
+
+    if len(conf.control_targets) > 1:
+        attach_back(workflow, merge_bams_control)
+    else:
+        attach_back(workflow, make_copy_command(merge_bams_control.input[0], merge_bams_control.output))
 
     # Most complicated command
     macs2_on_merged = attach_back(workflow,
         ShellCommand(
             "{tool} callpeak -B -q 0.01 --keep-dup {param[keep_dup]} --shiftsize={param[shiftsize]} --nomodel \
             -t {input[treat]} -c {input[control]} -n {param[description]}",
-            tool = "macs2",
-            input = {"treat": conf.prefix + "_treatment.bam",
-                     "control": conf.prefix + "_control.bam"},
-            output = {"peaks": conf.prefix + "_peaks.bed",
-                      "summit": conf.prefix + "_summits.bed",
-                      "treat_bdg": conf.prefix + "_treat_pileup.bdg",
-                      "ENCODE": conf.prefix + "_peaks.encodePeak",
-                      "peaks_xls": conf.prefix + "_peaks.xls",
-                      "control_bdg": conf.prefix + "_control_lambda.bdg"},
-            param = {"description": conf.prefix,
-                     "keep_dup": 1,
-                     "shiftsize":73},
-            name= "macs2_callpeak_merged"))
-    
+            tool="macs2",
+            input={"treat": conf.prefix + "_treatment.bam",
+                   "control": conf.prefix + "_control.bam"},
+            output={"peaks": conf.prefix + "_peaks.bed",
+                    "summit": conf.prefix + "_summits.bed",
+                    "treat_bdg": conf.prefix + "_treat_pileup.bdg",
+                    "ENCODE": conf.prefix + "_peaks.encodePeak",
+                    "peaks_xls": conf.prefix + "_peaks.xls",
+                    "control_bdg": conf.prefix + "_control_lambda.bdg"},
+            param={"description": conf.prefix,
+                   "keep_dup": 1,
+                   "shiftsize": 73},
+            name="macs2_callpeak_merged"))
+
     macs2_on_merged.update(param=conf.items("macs2"))
-    
+
 
     ## filter bdg file to remove over-border coordinates
     bdg_trim_control = attach_back(workflow,
-             ShellCommand(
-                '{tool} intersect -a {input[bdg]} -b {input[chrom_bed]} -wa -f 1.00 > {output}',
-                tool = "bedtools",
-                input = {"bdg": conf.prefix + "_control_lambda.bdg",
-                         'chrom_bed': conf.get_path("lib", "chrom_bed")},
-                output = conf.prefix + "_control_lambda.bdg.tmp",
-                name = "bedGraph filtering"))
+        ShellCommand(
+            '{tool} intersect -a {input[bdg]} -b {input[chrom_bed]} -wa -f 1.00 > {output}',
+            tool="bedtools",
+            input={"bdg": conf.prefix + "_control_lambda.bdg",
+                   'chrom_bed': conf.get_path("lib", "chrom_bed")},
+            output=conf.prefix + "_control_lambda.bdg.tmp",
+            name="bedGraph filtering"))
 
     ## For bedGraphToBigwiggle bugs, we need to remove coordinates outlier
     bdg_trim_treat = bdg_trim_control.clone
     bdg_trim_treat.input["bdg"] = conf.prefix + "_treat_pileup.bdg"
     bdg_trim_treat.output = conf.prefix + "_treat_pileup.bdg.tmp"
     attach_back(workflow, bdg_trim_treat)
-    
+
     bdg2bw_treat = attach_back(workflow,
         ShellCommand(
             "{tool} {input[bdg]} {input[chrom_len]} {output[bw]}",
@@ -214,7 +224,7 @@ def step4_prepare_macs2_peakcall(workflow, conf):
             input={"bdg": conf.prefix + "_control_lambda.bdg.tmp",
                    "chrom_len": conf.get("lib", "chrom_len")},
             output={"bw": conf.prefix + "_control.bw"},
-            name= "bdg_to_bw"))
+            name="bdg_to_bw"))
 
     # prototype used here to do the similar thing on treatment file
     bdg2bw_control = bdg2bw_treat.clone
@@ -224,16 +234,13 @@ def step4_prepare_macs2_peakcall(workflow, conf):
 
     attach_back(workflow, PythonCommand(
         qc_high_confident_peaks_draw,
-        input = {"macs2_peaks_xls": conf.prefix + "_peaks.xls",
-                 "R_template": R_cumulative_template,
-                 "db": ChiLinQC_db},
-        output = {"rfile": conf.prefix + "_high_confident_peak_rate.R",
-                  "pdf": conf.prefix + "_high_confident_peak_rate.pdf"},
-        param = {"id": os.path.basename(conf.prefix)}
+        input={"macs2_peaks_xls": conf.prefix + "_peaks.xls",
+               "R_template": R_cumulative_template,
+               "db": ChiLinQC_db},
+        output={"rfile": conf.prefix + "_high_confident_peak_rate.R",
+                "pdf": conf.prefix + "_high_confident_peak_rate.pdf"},
+        param={"id": os.path.basename(conf.prefix)}
     ))
-
-
-
 
 
 def step4_prepare_macs2_peakcall_on_rep(workflow, conf):
@@ -246,17 +253,17 @@ def step4_prepare_macs2_peakcall_on_rep(workflow, conf):
             ShellCommand(
                 "{tool} callpeak -B -q 0.01 --keep-dup {param[keep_dup]} --shiftsize={param[shiftsize]} --nomodel \
                 -t {input[treat]} -c {input[control]} -n {param[description]}",
-                tool = "macs2",
-                input = {"treat": target + ".bam",
-                         "control": conf.prefix + "_control.bam"},
-                output = {"peaks": target + "_peaks.bed",
-                          "summit": target + "_summits.bed",
-                          "treat_bdg": target + "_treat_pileup.bdg",
-                          "ENCODE": target + "_peaks.encodePeak",
-                          "peaks_xls": target + "_peaks.xls",
-                          "control_bdg": target + "_control_lambda.bdg"},
-                param = {"description": target, "keep_dup": 1, "shiftsize":73},
-                name= "macs2_callpeak_rep"))
+                tool="macs2",
+                input={"treat": target + ".bam",
+                       "control": conf.prefix + "_control.bam"},
+                output={"peaks": target + "_peaks.bed",
+                        "summit": target + "_summits.bed",
+                        "treat_bdg": target + "_treat_pileup.bdg",
+                        "ENCODE": target + "_peaks.encodePeak",
+                        "peaks_xls": target + "_peaks.xls",
+                        "control_bdg": target + "_control_lambda.bdg"},
+                param={"description": target, "keep_dup": 1, "shiftsize": 73},
+                name="macs2_callpeak_rep"))
         macs2_on_rep.update(param=conf.items("macs2"))
         macs2_run_list.append(macs2_on_rep)
 
@@ -265,25 +272,25 @@ def step4_prepare_macs2_peakcall_on_rep(workflow, conf):
         ## For bedGraphToBigwiggle bugs, we need to remove coordinates outlier
         ## filter bdg file to remove over-border coordinates
         bdg_trim_controlrep = attach_back(workflow,
-                ShellCommand(
-                    '{tool} intersect -a {input} -b {param[chrom_bed]} -wa -f 1.00 > {output}',
-                    tool = "bedtools",
-                    input = target + "_control_lambda.bdg",
-                    output = target + "_control_lambda.bdg.tmp",
-                    param = {'chrom_bed': conf.get("lib", "chrom_bed")},
-                    name = "bedGraph replicate filtering"))
+            ShellCommand(
+                '{tool} intersect -a {input} -b {param[chrom_bed]} -wa -f 1.00 > {output}',
+                tool="bedtools",
+                input=target + "_control_lambda.bdg",
+                output=target + "_control_lambda.bdg.tmp",
+                param={'chrom_bed': conf.get("lib", "chrom_bed")},
+                name="bedGraph replicate filtering"))
         bdg_trim_treatrep = bdg_trim_controlrep.clone
         bdg_trim_treatrep.input = target + "_treat_pileup.bdg"
         bdg_trim_treatrep.output = target + "_treat_pileup.bdg.tmp"
         attach_back(workflow, bdg_trim_treatrep)
-        
+
         bdg2bw_treatrep = attach_back(workflow,
-                ShellCommand(
-                    "{tool} {input} {param[chrom_len]} {output}",
-                    tool="bedGraphToBigWig",
-                    input= target + "_treat_pileup.bdg.tmp",
-                    output = target + "_treat.bw",
-                    param = {"chrom_len": conf.get("lib", "chrom_len")},name= "bdg_to_bw"))
+            ShellCommand(
+                "{tool} {input} {param[chrom_len]} {output}",
+                tool="bedGraphToBigWig",
+                input=target + "_treat_pileup.bdg.tmp",
+                output=target + "_treat.bw",
+                param={"chrom_len": conf.get("lib", "chrom_len")}, name="bdg_to_bw"))
 
         # prototype used here to do the similar thing on treatment file
         bdg2bw_controlrep = bdg2bw_treatrep.clone
@@ -291,86 +298,80 @@ def step4_prepare_macs2_peakcall_on_rep(workflow, conf):
         bdg2bw_controlrep.output = target + "_treat.bw"
         attach_back(workflow, bdg2bw_controlrep)
 
-
     attach_back(workflow,
         PythonCommand(
             qc_non_redundant_rate_draw,
-            input = {"all_peak_xls": [target + "_peaks.xls" for target in conf.treatment_targets],
-                    "db": ChiLinQC_db,
-                    "R_template": R_cumulative_template,
-                    "Latex_summary_table": resource_filename("chilin2", "jinja_template/Latex_summary_table_template.jinja2")},
-            output= {"rfile": conf.prefix + "_redundant_dist.R",
-                     "pdf": conf.prefix + "_redundant_dist.pdf"},
-            param = {"ids": conf.treatment_bases}))
-
+            input={"all_peak_xls": [target + "_peaks.xls" for target in conf.treatment_targets],
+                   "db": ChiLinQC_db,
+                   "R_template": R_cumulative_template,
+                   "Latex_summary_table": resource_filename("chilin2",
+                       "jinja_template/Latex_summary_table_template.jinja2")},
+            output={"rfile": conf.prefix + "_redundant_dist.R",
+                    "pdf": conf.prefix + "_redundant_dist.pdf"},
+            param={"ids": conf.treatment_bases}))
 
 
 def step4_prepare_macs2_venn_on_rep(workflow, conf):
     # awk and bedClip to remove outlier for venn and correlation plot
     for target in conf.treatment_targets:
         bed_filter = attach_back(workflow,
-                ShellCommand(
-                    "{tool} '{{if ($2 >= 0 && $2 < $3) print}}' {input} > {output}",
-                    tool = "awk",
-                    input = target + "_peaks.bed",
-                    output = target + "_peaks.bed.tmp",
-                    name = "filter bed files"))
+            ShellCommand(
+                "{tool} '{{if ($2 >= 0 && $2 < $3) print}}' {input} > {output}",
+                tool="awk",
+                input=target + "_peaks.bed",
+                output=target + "_peaks.bed.tmp",
+                name="filter bed files"))
 
         # prototype used here to do the similar thing on bedclip
         bed_clip = attach_back(workflow,
-                ShellCommand(
-                      template = "{tool} {input} {param[chrom_len]} {output}",
-                      tool = "bedClip",
-                      input  = target + "_peaks.bed.tmp",
-                      output = target + "_peaks.bed",
-                      param = {'chrom_len': conf.get_path("lib", "chrom_len")},
-                      name = "bedclip filter"))
+            ShellCommand(
+                template="{tool} {input} {param[chrom_len]} {output}",
+                tool="bedClip",
+                input=target + "_peaks.bed.tmp",
+                output=target + "_peaks.bed",
+                param={'chrom_len': conf.get_path("lib", "chrom_len")},
+                name="bedclip filter"))
         bed_clip.allow_fail = True
-
 
     venn_on_peaks = attach_back(workflow,
         ShellCommand(
             "{tool} -t Overlap_of_Replicates {param[beds]} && \
             mv venn_diagram.png {output}",
-            tool = "venn_diagram.py",
-            input = [target + "_peaks.bed.tmp" for target in conf.treatment_targets],
-            output = conf.prefix + "venn.png", name= "venn_diagram"))
+            tool="venn_diagram.py",
+            input=[target + "_peaks.bed.tmp" for target in conf.treatment_targets],
+            output=conf.prefix + "venn.png", name="venn_diagram"))
     venn_on_peaks.param = {"beds": " ".join(venn_on_peaks.input)}
     venn_on_peaks.allow_fail = True
-
-
-    attach_back(workflow,
-        PythonCommand(
-            qc_replicate_parse,
-            input = {"correlation_R": conf.prefix + "_cor.R",
-                     "Latex_summary_table": resource_filename("chilin2", "jinja_template/Latex_summary_table_template.jinja2")})
-    )
-
-
 
 
 
 
 def step4_prepare_macs2_cor_on_rep(workflow, conf):
-
     cor_on_bw = attach_back(workflow,
         ShellCommand(
-            template =
+            template=
             """{tool} \
             -s {param[wig_correlation_step]}  \
             --min-score {param[wig_correlation_min]} --max-score {param[wig_correlation_max]} \
             -r {output[R]} {param[bw]}  {param[rep]} && \
             mv {output[R]}.pdf {output[pdf]}""",
-            tool = "bigwig_correlation.py",
-            input = [target + "_treat.bw" for target in conf.treatment_targets],
-            output = {"R": conf.prefix + "_cor.R", "pdf": conf.prefix + "_cor.pdf"},
-            param = {"wig_correlation_method": "mean",
-                     "wig_correlation_min": 2,
-                     "wig_correlation_max": 50},
-            name = "cor_on_bw"))
+            tool="bigwig_correlation.py",
+            input=[target + "_treat.bw" for target in conf.treatment_targets],
+            output={"R": conf.prefix + "_cor.R", "pdf": conf.prefix + "_cor.pdf"},
+            param={"wig_correlation_method": "mean",
+                   "wig_correlation_min": 2,
+                   "wig_correlation_max": 50},
+            name="cor_on_bw"))
     cor_on_bw.param["bw"] = " ".join(cor_on_bw.input)
-    cor_on_bw.param["rep"] = " ".join([" -l replicate_%s"%(x+1) for x in range(len(conf.treatment_pairs))])
-    cor_on_bw.update(param = conf.items("correlation"))
+    cor_on_bw.param["rep"] = " ".join([" -l replicate_%s" % (x + 1) for x in range(len(conf.treatment_pairs))])
+    cor_on_bw.update(param=conf.items("correlation"))
+
+    attach_back(workflow,
+        PythonCommand(
+            qc_replicate_parse,
+            input={"correlation_R": conf.prefix + "_cor.R",
+                   "Latex_summary_table": resource_filename("chilin2",
+                       "jinja_template/Latex_summary_table_template.jinja2")}))
 
 
 #def step5_prepare_DHS_overlap_annotation(workflow, conf):
@@ -404,12 +405,12 @@ def step5_prepare_ceas_annotation(workflow, conf):
     get_top_peaks = attach_back(workflow,
         ShellCommand(
             "{tool} -r -g -k 5 {input} | head -n {param[peaks]} > {output}",
-            tool = "sort",
-            input = conf.prefix + "_peaks.bed",
-            output = conf.prefix + "_peaks_top.bed",
-            param = {"peaks": 3000},
-            name= "top summits for conservation"))
-    get_top_peaks.update(param = conf.items("ceas"))
+            tool="sort",
+            input=conf.prefix + "_peaks.bed",
+            output=conf.prefix + "_peaks_top.bed",
+            param={"peaks": 3000},
+            name="top summits for conservation"))
+    get_top_peaks.update(param=conf.items("ceas"))
 
     ceas = attach_back(workflow,
         ShellCommand(
@@ -423,106 +424,104 @@ def step5_prepare_ceas_annotation(workflow, conf):
                    "chrom_len": conf.get_path("lib", "chrom_len")},
             output={"R": conf.prefix + "_ceas.R",
                     "pdf": conf.prefix + "_ceas.pdf"},
-            param = {"description": conf.prefix},
-            name= "ceas"))
-    ceas.update(param = conf.items("ceas"))
+            param={"description": conf.prefix},
+            name="ceas"))
+    ceas.update(param=conf.items("ceas"))
     ceas.allow_fail = True
 
     attach_back(workflow,
         PythonCommand(
             qc_redraw_ceas_graph,
-            input = {"macs2_peaks_xls": conf.prefix + "_peaks.xls",
-                     "ceas_rscript": conf.prefix + "_ceas.R",
-                     "Latex_summary_table": resource_filename("chilin2", "jinja_template/Latex_summary_table_template.jinja2")},
-            output = {"rfile":"_qc_ceas.R",
-                      "peakheight_and_pie_pdf": conf.prefix + "_peakheight_and_pie.pdf",
-                      "metagene_dist_pdf":conf.prefix +  "_metagene_dist.pdf"})
+            input={"macs2_peaks_xls": conf.prefix + "_peaks.xls",
+                   "ceas_rscript": conf.prefix + "_ceas.R",
+                   "Latex_summary_table": resource_filename("chilin2",
+                       "jinja_template/Latex_summary_table_template.jinja2")},
+            output={"rfile": "_qc_ceas.R",
+                    "peakheight_and_pie_pdf": conf.prefix + "_peakheight_and_pie.pdf",
+                    "metagene_dist_pdf": conf.prefix + "_metagene_dist.pdf"})
     )
-
 
 
 def step5_prepare_phast_conservation_annotation(workflow, conf):
     get_top_peaks = attach_back(workflow,
         ShellCommand(
             "{tool} -r -g -k 5 {input} | head -n {param[peaks]} > {output}",
-            tool = "sort",
-            input = conf.prefix + "_summits.bed",
-            output = conf.prefix + "_summits_topconserv.bed",
-            param = {'peaks': 5000}, name= "top summits for conservation"))
+            tool="sort",
+            input=conf.prefix + "_summits.bed",
+            output=conf.prefix + "_summits_topconserv.bed",
+            param={'peaks': 5000}, name="top summits for conservation"))
     get_top_peaks.update(param=conf.items('conservation'))
 
     conservation = attach_back(workflow,
         ShellCommand(
             "{tool} -t Conservation_at_summits \
             -d {input[phast]} -l Peak_summits {input[bed]} -w {param[width]}",
-            tool = "conservation_plot.py",
-            input = {"bed" : conf.prefix + "_summits_topconserv.bed",
-                     "phast" : conf.get_path("lib", "phast")},
+            tool="conservation_plot.py",
+            input={"bed": conf.prefix + "_summits_topconserv.bed",
+                   "phast": conf.get_path("lib", "phast")},
 
             # TODO(Qian): (1) Change to a better name (2) Output to the output dir, not current dir
-            output = ["tmp.pdf", "tmp.R"],
-            param = {"width": 4000},
-            name= "conservation"))
-    conservation.update(param = conf.items('conservation'))
+            output=["tmp.pdf", "tmp.R"],
+            param={"width": 4000},
+            name="conservation"))
+    conservation.update(param=conf.items('conservation'))
 
     attach_back(workflow,
         ShellCommand(
             "{tool} -resize 500x500 -density 50  {input[pdf]} {output[pdf]} && mv {input[R]} {output[R]}",
-            tool = "convert",  ## width differs histone mark and TF
-            input = {"pdf": "tmp.pdf", "R": "tmp.R"},
-            output = {"pdf": conf.prefix + "conserv.pdf", "R": conf.prefix + "conserv.R"},
-            name= "convert pdf to png",))
-
+            tool="convert", ## width differs histone mark and TF
+            input={"pdf": "tmp.pdf", "R": "tmp.R"},
+            output={"pdf": conf.prefix + "conserv.pdf", "R": conf.prefix + "conserv.R"},
+            name="convert pdf to png", ))
 
     conservation = attach_back(workflow,
         PythonCommand(
             qc_conservation_draw,
-            input = {"conservationR": conf.prefix + "conserv.R",
-                    "historical_conservation_cluster_text": resource_filename("chilin2", "db/TF_centers.txt")},
-            output = {"rfile": conf.prefix + "_qc_conserv_compare.R",
-                      "pdf": conf.prefix + "_qc_conserv_compare.pdf"},
-            param = {"atype": conf.get("Basis", "type", "TF")})
+            input={"conservationR": conf.prefix + "conserv.R",
+                   "historical_conservation_cluster_text": resource_filename("chilin2", "db/TF_centers.txt")},
+            output={"rfile": conf.prefix + "_qc_conserv_compare.R",
+                    "pdf": conf.prefix + "_qc_conserv_compare.pdf"},
+            param={"atype": conf.get("Basis", "type", "TF")})
     )
 
     conservation.param.update({})
 
 
-
 def step5_prepare_mdseqpos_annotation(workflow, conf):
-
     # This will work for only Human and Mouse
     # MDseqpos take uniform input, we need to remove random sequence part and get top 1000 summits
     get_top_summits = attach_back(workflow,
         ShellCommand(
             '{tool} "/^chr[1-22XY]/" {input} |sort -r -g -k 5|head -n {param[peaks]} > {output}',
-            tool = "awk",
-            input = conf.prefix + "_summits.bed",
-            output = conf.prefix + "_summits_topmdfilter.bed",
-            param = {'peaks': 1000}, name= "filter summits for motif"))
-    get_top_summits.update(param = conf.items("seqpos"))
+            tool="awk",
+            input=conf.prefix + "_summits.bed",
+            output=conf.prefix + "_summits_topmdfilter.bed",
+            param={'peaks': 1000}, name="filter summits for motif"))
+    get_top_summits.update(param=conf.items("seqpos"))
 
     mdseqpos = attach_back(workflow,
         ShellCommand(
             "{tool} -d  -w 600  -p 0.001  -m cistrome.xml  -s {param[species]} {input} {param[version]}",
             "MDSeqPos.py",
-            input = conf.prefix + "_summits_topmdfilter.bed",
-            output = "results",
-            param = {"species": "hs", "version": "hg19"}, name= "motif finding"))
-    mdseqpos.update(param = conf.items("seqpos"))
+            input=conf.prefix + "_summits_topmdfilter.bed",
+            output="results",
+            param={"species": "hs", "version": "hg19"}, name="motif finding"))
+    mdseqpos.update(param=conf.items("seqpos"))
 
     attach_back(workflow,
         ShellCommand(
             "{tool} {input} {output}",
             "mv",
-            input = "results",
-            output = conf.prefix + "_seqpos",
-            name= "mv seqpos"))
+            input="results",
+            output=conf.prefix + "_seqpos",
+            name="mv seqpos"))
+
 
 def step6_prepare_report_summary(workflow, conf):
     attach_back(workflow,
-        ShellCommand(name= "report"))
+        ShellCommand(name="report"))
 
-        
+
 def create_workflow(args, conf):
     """
     :type conf:ChiLinConfig
@@ -533,11 +532,10 @@ def create_workflow(args, conf):
     attach_back(workflow,
         ShellCommand(
             "if [ ! -d '{output}' ]; then mkdir -p {output}; fi",
-            output = conf.target_dir))
+            output=conf.target_dir))
 
     # Whether there are replicates for treatment group
     have_reps = len(conf.treatment_pairs) >= 2
-
 
     step1_prepare_groom_sequencing_files(workflow, conf)
     step2_prepare_raw_QC(workflow, conf)
@@ -554,16 +552,17 @@ def create_workflow(args, conf):
     step5_prepare_mdseqpos_annotation(workflow, conf)
     return workflow
 
+
 def main(args=None):
     args = parse_args(args)
     print("Arguments:", args)
     conf = ChiLinConfig(args.config)
     workflow = create_workflow(args, conf)
     workflow.set_option(
-        verbose_level = args.verbose_level,
-        dry_run_mode = args.dry_run,
-        resume = args.resume,
-        allow_dangling = args.allow_dangling)
+        verbose_level=args.verbose_level,
+        dry_run_mode=args.dry_run,
+        resume=args.resume,
+        allow_dangling=args.allow_dangling)
 
     workflow.invoke()
 
