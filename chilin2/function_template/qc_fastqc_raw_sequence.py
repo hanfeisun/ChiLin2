@@ -33,26 +33,23 @@ def _python_fastqc_parse(input, output=None, param=None):
     return {"sequence_length": sequence_length,
             "median": median}
 
+
 def python_fastqc_dist_draw(input={"db": "", "fastqc_summary_list": [], "R_template": "", "latex_template": ""},
                             output={"rfile": "", "latex_section": "", "pdf": ""},
                             param={"ids": [], "id": ""}):
-
     seq_lengths = []
     quality_medians = []
-    fastqc_summary = []
+
 
     for a_summary in input["fastqc_summary_list"]:
-        parsed_summary = _python_fastqc_parse(input=a_summary)
-        param["medians"].append(parsed_summary["median"])
+        parsed_result = _python_fastqc_parse(input=a_summary)
+        quality_medians.append(parsed_result["median"])
 
-    
-    for j in range(len(param["medians"])):
-        # TODO (Qian), don't format here, don't pack all the information into a list
-        fastqc_summary.append([param["ids"][j],
-                          seq_lengths[j],
-                          quality_medians[j]])
-
-
+    # The table of fastqc_summary that will be used for rendering
+    # Col 1: sample ID
+    # Col 2: sequence length
+    # Col 3: median of sequence quality
+    fastqc_summary = zip(param["ids"], seq_lengths, quality_medians)
 
     qc_db = sqlite3.connect(input["db"]).cursor()
     qc_db.execute("SELECT median_quality FROM fastqc_info")
@@ -72,16 +69,15 @@ def python_fastqc_dist_draw(input={"db": "", "fastqc_summary_list": [], "R_templ
 
     write_and_run_Rscript(fastqc_dist_R, output["rfile"])
 
-    
     sequence_quality_latex = JinjaTemplateCommand(
-        template = input['latex_template'],
-        param = {"section_name": "sequence_quality",
-                 "path": output["pdf"],
-                 "qc_report_begin":True,
-                 "fastqc_table": fastqc_summary,
-                 "fastqc_graph": output["pdf"],
-                 'prefix_dataset_id': param['id']})
-    write_into(sequence_quality_latex,  output["latex_section"])
+        template=input['latex_template'],
+        param={"section_name": "sequence_quality",
+               "path": output["pdf"],
+               "qc_report_begin": True,
+               "fastqc_table": fastqc_summary,
+               "fastqc_graph": output["pdf"],
+               'prefix_dataset_id': param['id']})
+    write_into(sequence_quality_latex, output["latex_section"])
 
     return {}
 
