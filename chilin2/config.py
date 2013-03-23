@@ -104,6 +104,7 @@ class ChiLinConfig(object):
     def control_bases(self):
         return [self._base(i) for i in self.control_targets]
 
+    @property
     def sample_bases(self):
         return [self._base(i) for i in self.sample_targets]
 
