@@ -47,7 +47,7 @@ def write_into(jinja_template, file_path):
 
 def write_and_run_Rscript(jinja_template_r, file_path):
     write_into(jinja_template_r, file_path)
-    subprocess.call("Rscript %s" %file_path)
+    subprocess.call("Rscript %s" %file_path, shell=True)
 
 
 
