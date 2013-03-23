@@ -12,9 +12,11 @@ from chilin2.config import ChiLinConfig
 from pkg_resources import resource_filename
 from chilin2.function_template.qc_bowtie import qc_bowtie_summary_draw
 from chilin2.function_template.qc_fastqc_raw_sequence import python_fastqc_dist_draw
+from chilin2.function_template.qc_macs2 import qc_high_confident_peaks_draw, qc_non_redundant_rate_draw
 from chilin2.function_template.qc_venn_replicate import qc_replicate_parse
 from chilin2.function_template.qc_ceas import qc_redraw_ceas_graph
 from chilin2.function_template.qc_phast_conservation import qc_conservation_draw
+
 
 ChiLinQC_db = resource_filename("chilin2", "db/ChiLinQC.db")
 R_cumulative_template = resource_filename("chilin2", "jinja_template/R_culmulative_plot.R.jinja2")
@@ -106,14 +108,12 @@ def step2_prepare_raw_QC(workflow, conf):
             python_fastqc_dist_draw,
             input = {"db": ChiLinQC_db,
                      "fastqc_summary_list": [target + "_fastqc/fastqc_data.txt" for target in conf.sample_targets],
-                     "R_template": R_cumulative_template},
+                     "R_template": R_cumulative_template,
                      "latex_template": Latex_summary_report_template},
             output = {"rfile": conf.prefix + "_raw_sequence_qc.R",
                       "latex_section": conf.prefix + "_raw_sequence_qc.tex",
                       "pdf": conf.prefix + "_raw_sequence_qc.pdf"},
-
-            param = {"ids" : conf.sample_bases,
-
+            param = {"ids" : conf.sample_bases}))
 
 def step3_prepare_bowtie_map(workflow, conf):
     for target in conf.sample_targets:
