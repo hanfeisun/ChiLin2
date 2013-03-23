@@ -41,43 +41,12 @@ def python_fastqc_dist_draw(input={"db": "", "fastqc_summary_list": [], "R_templ
     quality_medians = []
     fastqc_summary = []
 
-
-    
-    for a_summary in input["fastqc_summary_list"]:
-        parsed = _python_fastqc_parse(input=a_summary)
-
     for a_summary in input["fastqc_summary_list"]:
         parsed_summary = _python_fastqc_parse(input=a_summary)
         param["medians"].append(parsed_summary["median"])
 
-    qc_db = sqlite3.connect(input["db"]).cursor()
-    qc_db.execute("select median_quality from fastqc_info")
-    history_data = [float(i[0]) for i in qc_db.fetchall()]
-
-    fastqc_R = JinjaTemplateCommand(
-        template=input["R_template"],
-        param={'historic_data': history_data,
-               'current_data': param["medians"],
-               'ids': param["ids"],
-               'cutoff': 25,
-               'main': 'Sequence Quality Score Cumulative Percentage',
-               'xlab': 'sequence quality score',
-               'ylab': 'fn(sequence quality score)',
-               "pdf": output["pdf"],
-               "need_smooth_curve": True})
-    fastqc_R.invoke()
-
-    with open(output["rfile"], "w") as f:
-        f.write(fastqc_R.result)
-
-    ThrowableShellCommand('Rscript {input}', input=output["rfile"]).invoke()
-
-    return {}
-
-
     
     for j in range(len(param["medians"])):
-
         # TODO (Qian), don't format here, don't pack all the information into a list
         fastqc_summary.append([param["ids"][j],
                           seq_lengths[j],
