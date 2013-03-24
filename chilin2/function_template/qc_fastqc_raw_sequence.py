@@ -70,6 +70,7 @@ def python_fastqc_dist_draw(input={"db": "", "fastqc_summary_list": [], "R_templ
     write_and_run_Rscript(fastqc_dist_R, output["rfile"])
 
     sequence_quality_latex = JinjaTemplateCommand(
+        name = "sequence quality",
         template=input['latex_template'],
         param={"section_name": "sequence_quality",
                "path": output["pdf"],

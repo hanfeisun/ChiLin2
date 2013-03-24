@@ -86,8 +86,7 @@ We draw the cumulative percentage plot of the sequence quality scores of all his
 %# --------mapping QC--------mapping_check : basic_map_table ; mappable_ratio_graph ; redundant_ratio_graph
 %# --------basic mapping QC statistics--------
 
-%- if MappingQC_check
-%- if Bowtie_check
+%- if section_name == "bowtie"
 \subsection{Basic mapping QC statistics}
 \begin{quotation}
 Bowtie is an ultrafast, memory-efficient alignment program for aligning short DNA sequence reads to large genomes.\footnote{Langmead B, Trapnell C, Pop M, Salzberg SL: Ultrafast and memory-efficient alignment of short DNA sequences to the human genome. Genome Biology 2009, 10(3):R25}
@@ -110,7 +109,7 @@ Sample & Total reads & Unique Mappable reads & Unique Mappable rate & Unique Map
 \BLOCK{ endfor }
 \end{tabularx}
 \end{table}
-\newpage  
+\newpage
 
 %# -------mappable reads ratio---------
 \subsection{Mappable reads ratio}
@@ -126,7 +125,9 @@ For following figure, this is a cumulative distribution file of the mappable rat
 \end{figure}
 \newpage
 %- endif
+
 %# -------mappable redundant rate-----------
+%- if section_name == "redundant"
 \subsection{Mappable Non-Redundant rate}
 \begin{quotation}
 This is a cumulative distribution file of the mappable non-redundant ratio of all the ChIP-seq data in our data collection program,the x axis is the non-redundant ratio and the y axis represents the percentage of this ratio among all the data.Given several new sets of data, we can generate the locations of your data among all the data. the higher this ratio is, the higher data quality your data is.Here we set 0.8 as a cutoff for non-redundant rate.(Figure: ~\ref{fig:uni})
@@ -144,7 +145,7 @@ This is a cumulative distribution file of the mappable non-redundant ratio of al
 
 %# ---------peak calling QC---------- peak_summary_table ; DHS_ratio_graph ; velcro_ratio_graph
 
-%- if PeakcallingQC_check
+%- if section_name == "Peakcalling"
 \section{Peak calling QC measurement}
 \subsection{Peak calling summary}
 \begin{quotation}
@@ -165,7 +166,8 @@ Run name & False Discovery Rate & Peak count & peaks $\geq$ 10FC & Shift size \\
 \hline
 \end{tabularx}
 \end{table}
-\newpage    
+\newpage
+
 
 %#---------- Hight confident Peak
 \subsection{High confident Peak }
@@ -181,8 +183,11 @@ The figure shows the distribution for the number's logarithm of peaks that requi
 \end{figure}
 \newpage
 
+%- endif
+
 
 %#-------Peaks overlapped with DHS----------
+%- if section_name == "DHS_velcro"
 \subsection{Peaks overlapped with DHS(Dnase Hypersensitivity sites)}
 \begin{quotation}
 In eukaryotes, transcription is regulated in a cell-type and condition-specific manner through the association of transcription factors with chromatin. The genome-wide binding sites of transcription factors are influenced by the active protein levels of the transcription factors, chromatin structure, and DNA sequence.
@@ -195,15 +200,9 @@ We draw a CDF curve of the overlap with union DHS sites of all DC data, then we 
 {\includegraphics[width=0.70\textwidth]{\VAR{DHS_ratio_graph}}}
 \end{center}
 \end{figure}
-\newpage    
-
-
-
-
-
+\newpage
 
 %# -------peaks overlaped with Velcro---------
-%- if verlcro_check
 \subsection{Non-Velcro ratio(human only)}
 \begin{quotation}
 There has a comprehensive set of regions in the human genome that have anomalous, unstructured, high signal/read counts in next gen sequencing experiments independent of cell line and type of experiment. We call them Consensus Signal Artifact Regions (verlcro region). The breadth of cell-lines covered by the ENCODE datasets allows us to accomplish this in a systematic manner.
@@ -222,7 +221,7 @@ We draw a CDF curve of the overlap with Non-verlcro region of all DC data, then 
 
 %# -------replicate QC-------replicate_check : venn_graph ; correlation_graph
 
-%- if replicate_check
+%- if section_name == "replication"
 \subsection{Profile correlation within union peak regions}
 \begin{quotation}
 If biologist have replicate chipseq experiments,pipline will draw the correlation plot.the score means the correlation among these replicates' profiles. We can judge the replicate experiment quality if the correlaton is higher than 0.8.(Table: ~\ref{fig:profileunion})
@@ -249,13 +248,11 @@ If biologist have replicate chipseq experiments,pipline will draw the venn plot.
 \end{figure}
 \newpage
 %- endif
-%- endif
+
 
 %# -------Functional Genomic QC measurement------------height_distibution_graph ; gene_distribution_graph
 %#---------Ceas QC---------
-
-%- if AnnotationQC_check
-%- if ceas_check
+%- if section_name=='ceas'
 \section{Functional Genomic QC measurement}
 \subsection{Peak Height distribution}
 \begin{quotation}
@@ -286,7 +283,7 @@ Checking those maps gives us an insight about the average reads location near TS
 %- endif
 
 %# ---------Conservation QC----------- conservation_graph
-%- if conservation_check
+%- if section_name == "conservation"
 \subsection{Peak conservation score} 
 Conserved sequences are similar or identical sequences across species, it has been maintained by evolution despite speciation. Highly conserved sequences are thought to have conserved functional value. Conservation plot is set to judge the conservation of these transcriptions binding site or histome modification site. For transcription factor 500 bp upstream and downstream to summit of each peak is predefined, 2000 bp for histome modification.Through k-means cluster method we separate our history datasets\' conservation plot into several pattern, we choose the most similar conservation pattern with your dataset as a judgement.     (Figure ~\ref{fig:conservation}) \newline
 \begin{figure}[h] 
@@ -307,7 +304,7 @@ Conserved sequences are similar or identical sequences across species, it has be
 %- endif
 
 
-%- if motif_check
+%- if section_name == "motif"
 %# -----------motif QC---------------
 \subsection{Motif QC measurement analysis}
 \begin{quotation}
@@ -340,7 +337,6 @@ Factor name & Z-score & Hits  & Motif logo \tabularnewline
 \end{tabularx}
 \end{table}
 \newpage
-%- endif
 %- endif
 
 

@@ -2,7 +2,8 @@ import re
 import os
 import subprocess
 
-def qc_replicate_parse(input={"correlation_R":"","latex_SummaryTable":""},output=None, param=None):
+def qc_replicate_parse(input={"correlation_R":"", "cor_pdf": "", "venn": "", "latex_summaryTable":""},
+                       output={"latex_section": ""}, param=None):
     """ ReplicateQC aims to describe the similarity of replicate experiment. Venn diagram and correlation plot will be used."""
 
     correlation_result_R_code = open(input["correlation_R"]).read()
@@ -27,4 +28,13 @@ def qc_replicate_parse(input={"correlation_R":"","latex_SummaryTable":""},output
 
     latex_summary_table = ['Replication QC','%d rep treatment'%rep_count,'%s'%str(min_correlation),'0.6',judge]
     print(latex_summary_table)
+    replicate_latex = JinjaTemplateCommand(
+            name = "venn and correlation",
+            template = input["latex_summaryTable"],
+            param = {"section_name": "replication",
+                     "venn_graph": input["venn"],
+                     "correlation_graph": input["cor_pdf"]})
+    replicate_latex.allow_fail = True
+    
+    write_into(replicate_latex, output["latex_section"])
     return {}

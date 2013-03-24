@@ -75,4 +75,13 @@ def qc_conservation_draw(input={"conservationR": "","historical_conservation_clu
     # TODO (Shenglin): don't use append, use a separate file for each qc function in the same folder
     with open(output["latex_SummaryTable"],"a+") as f:
         f.write('\t'.join(latex_summary_table)+'\n')
+
+    conservation_latex = JinjaTemplateCommand(
+        name = "conservation",
+        template = input["latex_template"],
+        param={"section_name": "conservation",
+               "basic_map_table": basic_map_table,
+               "mappable_ratio_graph": output["pdf"]})
+    
+    write_into(conservation_latex, output["latex_section"])
     return {}

@@ -47,8 +47,13 @@ def qc_mdseqpos_parse_and_filter_by_z_score(input = "" , output="", param = {"z_
 
     if satisfied_count < 5:
         satisfied_motif_list = all_motif_list[:5]
+    
+    motif_latex = JinjaTemplateCommand(
+        name = "motif finding",
+        template = input["latex_template"],
+        param = {"motif_table": satisfied_motif_list,
+                 "section_name": "motif"}
+        )
+    write_into(motif_latex, output["latex_section"])
 
     return satisfied_motif_list
-    
-    
-

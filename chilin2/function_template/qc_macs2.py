@@ -3,7 +3,7 @@ import sqlite3
 import math
 from pyflow.command import ShellCommand, ThrowableShellCommand
 
-from chilin2.jinja_template_command import JinjaTemplateCommand
+from chilin2.jinja_template_render import JinjaTemplateCommand, write_and_run_Rscript, write_into
 
 
 # TODO: Check whether _check can be separated
@@ -57,12 +57,13 @@ def _qc_peak_summary_parse(input={"macs2_peaks_xls": ""},
     return {"peaks_summary":peaks_summary,"fold_gt_10_peaks_count":fold_greater_than_10_peaks_count}
 
 
-def qc_high_confident_peaks_draw(input={"macs2_peaks_xls": "", "db": "", "R_template": ""},
-                             output={"rfile": "", "pdf": ""},
+def qc_high_confident_peaks_draw(input={"macs2_peaks_xls": "", "latex_template": "","db": "", "R_template": ""},
+                             output={"rfile": "", "latex_section": "", "pdf": ""},
                              param={"id": ""}):
     """ cummulative plot of peaks fold change greater than 10"""
 #    param = fetch(param)
     peaks_summary_result = _qc_peak_summary_parse(input=input, param = param)
+
     name = [param["id"]]
     db = sqlite3.connect(input["db"]).cursor()
     db.execute("select peak_fc_10 from peak_calling")
@@ -79,16 +80,15 @@ def qc_high_confident_peaks_draw(input={"macs2_peaks_xls": "", "db": "", "R_temp
                'ylab': 'fn(log(Number of Peaks fold greater than 10))',
                "pdf": output["pdf"]})
 
-    high_confident_peaks_R.invoke()
-    with open(output["rfile"], 'w') as f:
-        f.write(high_confident_peaks_R.result)
-
-    ThrowableShellCommand(template = 'Rscript {input}', input= output["rfile"]).invoke()
-
+    write_and_run_Rscript(high_confident_peaks_R, output["rfile"])
+    high_confident_latex = JinjaTemplateCommand(
+        name = "high confident latex",
+        template = input["latex_template"],
+        param = {"section_name": "Peakcalling",
+                 "peak_summary_table": peaks_summary_result["peaks_summary"],
+                 "high_confident_peak_graph": output["pdf"]})
+    write_into(high_confident_latex, output['latex_section'])
     return {}
-
-
-
 
 def _qc_redundant_rate_parse(input={"all_peak_xls":[]}, param = {"ids": []}):
     redundant_ratio_list = []
@@ -100,9 +100,8 @@ def _qc_redundant_rate_parse(input={"all_peak_xls":[]}, param = {"ids": []}):
                     break
     return redundant_ratio_list
 
-
-def qc_non_redundant_rate_draw(input={"all_peak_xls": [],"db": "", "R_template": ""},
-                    output={"rfile": "", "pdf": ""},
+def qc_non_redundant_rate_draw(input={"all_peak_xls": [],"db": "", "latex_template": "","R_template": ""},
+                    output={"rfile": "", "latex_section": "", "pdf": ""},
                     param = {"ids": []}):
     """ Show redundant  ratio of the dataset in all historic data
     """
@@ -115,6 +114,7 @@ def qc_non_redundant_rate_draw(input={"all_peak_xls": [],"db": "", "R_template":
     db.execute("select redundant_rate from peak_calling")
     redundant_history = db.fetchall()
     historyData = [1-float(i[0]) for i in redundant_history if i[0] != "null"]
+    
 
     redundant_rate_R = JinjaTemplateCommand(name="redunRateQC",
         template=input["R_template"],
@@ -127,10 +127,13 @@ def qc_non_redundant_rate_draw(input={"all_peak_xls": [],"db": "", "R_template":
                'ylab': 'fn(Non-Redundant rate)',
                "pdf": output["pdf"],
                "need_smooth_curve": True})
+    
+    write_and_run_Rscript(redundant_rate_R, output["rfile"])
+    redundant_rate_latex = JinjaTemplateCommand(
+        name="redunRateQC",
+        template=input["latex_template"],
+        param = {"section_name": "redundant",
+                 "redundant_ratio_graph": output["pdf"]})
 
-    redundant_rate_R.invoke()
-    with open(output["rfile"], 'w') as f:
-        f.write(redundant_rate_R.result)
-
-    ThrowableShellCommand(template = 'Rscript {input}', input= output["rfile"]).invoke()
+    write_into(redundant_rate_latex, output['latex_section'])
     return {}

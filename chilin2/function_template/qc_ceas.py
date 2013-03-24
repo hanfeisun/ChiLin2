@@ -1,8 +1,8 @@
 import re
 import os
 
-def qc_redraw_ceas_graph(input={"macs2_peaks_xls": "", "ceas_rscript": ""},
-                         output={"rfile": "", "peakheight_and_pie_pdf": "", "metagene_dist_pdf": ""},param = None):
+def qc_redraw_ceas_graph(input={"macs2_peaks_xls": "", "ceas_rscript": "", "latex_template": ""},
+                         output={"rfile": "", "peakheight_and_pie_pdf": "", "metagene_dist_pdf": "","latex_section":""},param = None):
     """ Describe peaks' distribution and relative position.
     """
 
@@ -68,6 +68,15 @@ def qc_redraw_ceas_graph(input={"macs2_peaks_xls": "", "ceas_rscript": ""},
     return {}
 
     os.system('Rscript %s' % output["rfile"])
+
+    ceas_latex = JinjaTemplateCommand(
+        name = "ceas redraw",
+        template = input["latex_template"],
+        param = {"gene_distribution_graph": output["metagene_dist_pdf"],
+                 "section_name": "ceas",
+                 "meta_gene_graph": output["peakheight_and_pie_pdf"]})
+    write_into(ceas_latex, output["latex_section"])
+    
     return {'AnnotationQC_check' : True,
             'ceas_check' : True,
             "peakheight_and_pie_pdf":output["peakheight_and_pie_pdf"],
