@@ -1,5 +1,6 @@
 import re
 import os
+from chilin2.jinja_template_render import JinjaTemplateCommand, write_into
 
 def qc_redraw_ceas_graph(input={"macs2_peaks_xls": "", "ceas_rscript": "", "latex_template": ""},
                          output={"rfile": "", "peakheight_and_pie_pdf": "", "metagene_dist_pdf": "","latex_section":""},param = None):
@@ -63,9 +64,6 @@ def qc_redraw_ceas_graph(input={"macs2_peaks_xls": "", "ceas_rscript": "", "late
         r_file.write("nf <- layout(matrix(c(1,2,3,3), 2, 2, byrow=TRUE), width= c(1,1),height=c(1,1),respect=TRUE)\n")
         r_file.write(metagene_dist_r_codes)
         r_file.write('dev.off()\n')
-
-    os.system('Rscript %s' % output["rfile"])
-    return {}
 
     os.system('Rscript %s' % output["rfile"])
 

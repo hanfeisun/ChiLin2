@@ -1,6 +1,6 @@
 import re
-import os
 import subprocess
+from chilin2.jinja_template_render import JinjaTemplateCommand, write_into
 
 def qc_replicate_parse(input={"correlation_R":"", "cor_pdf": "", "venn": "", "latex_summaryTable":""},
                        output={"latex_section": ""}, param=None):

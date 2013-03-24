@@ -68,6 +68,7 @@ def qc_bowtie_summary_draw(input={"all_bowtie_summary": "", "db": "", "R_templat
                "basic_map_table": basic_map_table,
                "mappable_ratio_graph": output["pdf"],
                })
+    print(output["latex_section"])
     
     write_into(mapping_quality_latex, output['latex_section'])
     return {}

@@ -44,14 +44,17 @@ QC item & Sample or Dataset & Score & Cutoff & Pass or Fail \\
 %- endif
  
          
-\section{Reads Genomic Mapping QC measurement}
-\begin{quotation}
-Modern high throughput sequencers can generate tens of millions of sequences in a single run. Before analysing this sequence to draw biological conclusions you should always perform some simple quality control checks to ensure that the raw data looks good and there are no problems or biases in your data which may affect how you can usefully use it.
-\end{quotation} 
+
 
 %# -------------fastqc--------------fastqc_check : fastqc_table ; fastqc_graph
 
 %- if section_name == "sequence_quality"
+
+\section{Reads Genomic Mapping QC measurement}
+\begin{quotation}
+Modern high throughput sequencers can generate tens of millions of sequences in a single run. Before analysing this sequence to draw biological conclusions you should always perform some simple quality control checks to ensure that the raw data looks good and there are no problems or biases in your data which may affect how you can usefully use it.
+\end{quotation}
+
 \subsection{FastQC Summary table}
 \begin{quotation}
 FastQC aims to provide a QC report which can spot problems which originate in the sequencer. 
@@ -145,7 +148,7 @@ This is a cumulative distribution file of the mappable non-redundant ratio of al
 
 %# ---------peak calling QC---------- peak_summary_table ; DHS_ratio_graph ; velcro_ratio_graph
 
-%- if section_name == "Peakcalling"
+%- if section_name == "high_confident_peaks"
 \section{Peak calling QC measurement}
 \subsection{Peak calling summary}
 \begin{quotation}

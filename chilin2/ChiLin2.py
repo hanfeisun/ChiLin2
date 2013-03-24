@@ -364,7 +364,7 @@ def step4_prepare_macs2_cor_on_rep(workflow, conf):
     cor_on_bw.update(param=conf.items("correlation"))
     cor_on_bw.allow_fail = True
 
-    attach_back(workflow,
+    venn_qc = attach_back(workflow,
         PythonCommand(
             qc_replicate_parse,
             input={"correlation_R": conf.prefix + "_cor.R",
@@ -372,6 +372,8 @@ def step4_prepare_macs2_cor_on_rep(workflow, conf):
                    "cor_pdf": conf.prefix + "_cor.pdf",
                    "venn": conf.prefix + "_venn.png"},
             output={"latex_section":  conf.prefix + "_replicates.tex"}))
+
+
     
 
 # def step5_prepare_DHS_overlap_annotation(workflow, conf):

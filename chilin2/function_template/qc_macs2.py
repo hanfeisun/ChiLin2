@@ -84,7 +84,7 @@ def qc_high_confident_peaks_draw(input={"macs2_peaks_xls": "", "latex_template":
     high_confident_latex = JinjaTemplateCommand(
         name = "high confident latex",
         template = input["latex_template"],
-        param = {"section_name": "Peakcalling",
+        param = {"section_name": "high_confident_peaks",
                  "peak_summary_table": peaks_summary_result["peaks_summary"],
                  "high_confident_peak_graph": output["pdf"]})
     write_into(high_confident_latex, output['latex_section'])

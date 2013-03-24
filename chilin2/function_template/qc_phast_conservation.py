@@ -2,6 +2,7 @@ import re
 import os
 import math
 from pyflow.helper import fetch
+from chilin2.jinja_template_render import JinjaTemplateCommand, write_into
 
 def _euclidian_distance(x,y):
     assert len(x) == len(y)
@@ -80,8 +81,8 @@ def qc_conservation_draw(input={"conservationR": "","historical_conservation_clu
         name = "conservation",
         template = input["latex_template"],
         param={"section_name": "conservation",
-               "basic_map_table": basic_map_table,
-               "mappable_ratio_graph": output["pdf"]})
+               "conservation_graph": output["pdf"]})
+
     
     write_into(conservation_latex, output["latex_section"])
     return {}
