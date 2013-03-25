@@ -224,7 +224,7 @@ We draw a CDF curve of the overlap with Non-verlcro region of all DC data, then 
 
 %# -------replicate QC-------replicate_check : venn_graph ; correlation_graph
 
-%- if section_name == "replication"
+%- if section_name == "venn"
 \subsection{Profile correlation within union peak regions}
 \begin{quotation}
 If biologist have replicate chipseq experiments,pipline will draw the correlation plot.the score means the correlation among these replicates' profiles. We can judge the replicate experiment quality if the correlaton is higher than 0.8.(Table: ~\ref{fig:profileunion})
@@ -237,7 +237,9 @@ If biologist have replicate chipseq experiments,pipline will draw the correlatio
         {\includegraphics[width=0.8\textwidth]{\VAR{venn_graph}}}
 \end{figure}
 \newpage
+%- endif
 
+%- if section_name == "correlation"
 \subsection{Peaks overlap between Replicates}
 \begin{quotation}
 If biologist have replicate chipseq experiments,pipline will draw the venn plot.If chipseq peaks  among replicates have more than 1 bp overlap,we take as one overlap.The bigger overlap among replicates, the higher quality in replicate experiments. (Figure: ~\ref{fig:venn})
