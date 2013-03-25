@@ -81,7 +81,7 @@ class ChiLinConfig(object):
 
     @property
     def treatment_raws(self):
-        if self.get["Basis", "treat"].strip():
+        if self.get("Basis", "treat").strip():
             return [self.to_abs_path(i.strip()) for i in self.get("Basis", "treat").split(",")]
         else:
             raise NoTreatmentData

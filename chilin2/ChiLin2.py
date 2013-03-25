@@ -177,7 +177,7 @@ def step4_prepare_macs2_peakcall(workflow, conf):
 
     if len(conf.control_targets) > 1:
         attach_back(workflow, merge_bams_control)
-    else:
+    elif len(conf.control_targets) == 1:
         attach_back(workflow, make_copy_command(merge_bams_control.input[0], merge_bams_control.output["merged"]))
 
     # Most complicated command
