@@ -30,18 +30,18 @@ def qc_bowtie_summary_draw(input={"all_bowtie_summary": "", "db": "", "R_templat
     db = sqlite3.connect(input["db"]).cursor()
     db.execute("select map_ratio from mapping")
     historyData = [str(i[0]) for i in (db.fetchall())]
-    current_data_bowtie_summary = {"total_reads": [],
+    bowtie_summaries = {"total_reads": [],
                                    "mappable_reads": [],
                                    "mappable_rate": []}
     
     for a_summary in input["all_bowtie_summary"]:
         parsed_summary = _qc_bowtie_summary_parse(a_summary)
         for k, v in parsed_summary.items():
-            current_data_bowtie_summary[k].append(v)
+            bowtie_summaries[k].append(v)
 
     mappable_rate_R = JinjaTemplateCommand(template=input["R_template"],
         param={'historic_data': historyData,
-               'current_data': current_data_bowtie_summary["mappable_rate"],
+               'current_data': bowtie_summaries["mappable_rate"],
                'ids': param["ids"],
                'cutoff': 0.5,
                'main': 'Unique mapped rate',
@@ -53,13 +53,17 @@ def qc_bowtie_summary_draw(input={"all_bowtie_summary": "", "db": "", "R_templat
     write_and_run_Rscript(mappable_rate_R, output["rfile"])
 
     # basic mappable table, two layer list
-    # COL 1 total reads
-    # COL 2 mappable reads
-    # COL 3 mappable rates
+    # COL 1 ID
+    # COL 2 total reads
+    # COL 3 mappable reads
+    # COL 4 mappable rates
     basic_map_table = []
-    for l in range(len(current_data_bowtie_summary)):
-        basic_map_table.append(
-            [ current_data_bowtie_summary[i][l] for i in current_data_bowtie_summary ])
+    for idx, a_sample in enumerate(param["ids"]):
+        basic_map_table.append([a_sample,
+                        bowtie_summaries["total_reads"][idx],
+                        bowtie_summaries["mappable_reads"][idx],
+                        bowtie_summaries["mappable_rate"][idx]])
+
         
     mapping_quality_latex = JinjaTemplateCommand(
         name="mapping quality",
