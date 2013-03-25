@@ -89,7 +89,7 @@ def step1_prepare_groom_sequencing_files(workflow, conf):
             attach_back(workflow, make_copy_command(orig = raw, dest= target + ".fastq"))
         else:
             print(raw, " is neither fastq nor bam file. Skip grooming.")
-            not_groomed.append(raw, target)
+            not_groomed.append([raw, target])
     return not_groomed
 
 
