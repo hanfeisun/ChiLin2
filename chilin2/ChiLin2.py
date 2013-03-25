@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-
 import os
 import sys
 import re
@@ -64,16 +63,16 @@ def parse_args(args=None):
 def make_copy_command(orig, dest):
     return ShellCommand(
         "cp {input} {output}",
-        input = orig,
-        output = dest,
-        name = "copy")
-
+        input=orig,
+        output=dest,
+        name="copy")
 
 
 def step1_prepare_groom_sequencing_files(workflow, conf):
-    # Return the file name pair (raw, target) that can't be groomed
-    # If a file is neither a bam nor a fastq, it's returned in a list.
-    # This files (maybe BED files) can be captured and processed by other tools later
+    """
+    Return the file name pair (raw, target) that can't be groomed (neither fastq nor bam)
+    These files (maybe BED files) can be captured and processed by other tools later
+    """
     not_groomed = []
     for raw, target in conf.sample_pairs:
         if re.search(r"\.bam", raw, re.I):
@@ -86,7 +85,7 @@ def step1_prepare_groom_sequencing_files(workflow, conf):
                     name="groom"))
 
         elif re.search(r"\.(fastq|fq)", raw, re.I):
-            attach_back(workflow, make_copy_command(orig = raw, dest= target + ".fastq"))
+            attach_back(workflow, make_copy_command(orig=raw, dest=target + ".fastq"))
         else:
             print(raw, " is neither fastq nor bam file. Skip grooming.")
             not_groomed.append([raw, target])
@@ -146,7 +145,9 @@ def step3_prepare_bowtie_map(workflow, conf):
                 "latex_section": conf.prefix + "_mappable.tex"},
         param={"ids": conf.sample_bases}))
 
+
 def step4_prepare_macs2_peakcall(workflow, conf):
+    # convert the files from SAM to BAM format
     for target in conf.sample_targets:
         attach_back(workflow,
             ShellCommand(
@@ -155,39 +156,38 @@ def step4_prepare_macs2_peakcall(workflow, conf):
                 input={"sam": target + ".sam", "chrom_len": conf.get_path("lib", "chrom_len")},
                 output={"bam": target + ".bam"}))
 
+    # merge all treatments into one
     merge_bams_treat = ShellCommand(
-            "{tool} merge {output[merged]} {param[bams]}",
-            tool="samtools",
-            input=[target + ".bam" for target in conf.treatment_targets],
-            output= {"merged":conf.prefix + "_treatment.bam"})
-    # I have to set `params` separately as it depends on `input` parameter
+        "{tool} merge {output[merged]} {param[bams]}",
+        tool="samtools",
+        input=[target + ".bam" for target in conf.treatment_targets],
+        output={"merged": conf.prefix + "_treatment.bam"})
     merge_bams_treat.param = {"bams": " ".join(merge_bams_treat.input)}
 
-    # Here I use `merge_bams_treat` as a prototype to avoid duplication
-    merge_bams_control = merge_bams_treat.clone
-    merge_bams_control.input = [target + ".bam" for target in conf.control_targets]
-    merge_bams_control.output = {"merged": conf.prefix + "_control.bam"}
-    merge_bams_control.param = {"bams": " ".join(merge_bams_control.input)}
-
     if len(conf.treatment_targets) > 1:
-        # remember to attach_back into the workflow for prototype
         attach_back(workflow, merge_bams_treat)
     else:
+        # when there's only one treatment sample, use copying instead of merging
         attach_back(workflow, make_copy_command(merge_bams_treat.input[0], merge_bams_treat.output["merged"]))
 
+    # merging step will be skipped if control sample does not exist
+    # So be careful to check whether there are control samples before using `_control.bam`
     if len(conf.control_targets) > 1:
+        merge_bams_control = merge_bams_treat.clone
+        merge_bams_control.input = [target + ".bam" for target in conf.control_targets]
+        merge_bams_control.output = {"merged": conf.prefix + "_control.bam"}
+        merge_bams_control.param = {"bams": " ".join(merge_bams_control.input)}
         attach_back(workflow, merge_bams_control)
     elif len(conf.control_targets) == 1:
-        attach_back(workflow, make_copy_command(merge_bams_control.input[0], merge_bams_control.output["merged"]))
+        attach_back(workflow, make_copy_command(conf.control_targets[0], conf.prefix + "_control.bam"))
 
-    # Most complicated command
-    macs2_on_merged = attach_back(workflow,
-        ShellCommand(
+
+
+    macs2_on_merged = attach_back(workflow, ShellCommand(
             "{tool} callpeak -B -q 0.01 --keep-dup {param[keep_dup]} --shiftsize={param[shiftsize]} --nomodel \
-            -t {input[treat]} -c {input[control]} -n {param[description]}",
+            {param[treat_opt]} {param[control_opt]} -n {param[description]}",
             tool="macs2",
-            input={"treat": conf.prefix + "_treatment.bam",
-                   "control": conf.prefix + "_control.bam"},
+            input={"treat": conf.prefix + "_treatment.bam"},
             output={"peaks": conf.prefix + "_peaks.bed",
                     "summit": conf.prefix + "_summits.bed",
                     "treat_bdg": conf.prefix + "_treat_pileup.bdg",
@@ -198,11 +198,21 @@ def step4_prepare_macs2_peakcall(workflow, conf):
                    "keep_dup": 1,
                    "shiftsize": 73},
             name="macs2_callpeak_merged"))
+    macs2_on_merged.param["treat_opt"] = "-t " + macs2_on_merged.input["treat"]
+
+    # control option is skipped if control samples does not exist
+    if len(conf.control_targets) >=1:
+        macs2_on_merged.input["control"] = conf.prefix + "_control.bam"
+        macs2_on_merged.param["control_opt"] = "-c " + macs2_on_merged.input["control"]
+    else:
+        macs2_on_merged.param["control_opt"] = ""
+
 
     macs2_on_merged.update(param=conf.items("macs2"))
 
 
-    ## filter bdg file to remove over-border coordinates
+    # For bedGraphToBigwiggle bugs, we need to remove coordinates over-border coordinates
+    # As _control_lambda.bdg always exist. There are no need to check whether there are control samples.
     bdg_trim_control = attach_back(workflow,
         ShellCommand(
             '{tool} intersect -a {input[bdg]} -b {input[chrom_bed]} -wa -f 1.00 > {output}',
@@ -212,7 +222,6 @@ def step4_prepare_macs2_peakcall(workflow, conf):
             output=conf.prefix + "_control_lambda.bdg.tmp",
             name="bedGraph filtering"))
 
-    ## For bedGraphToBigwiggle bugs, we need to remove coordinates outlier
     bdg_trim_treat = bdg_trim_control.clone
     bdg_trim_treat.input["bdg"] = conf.prefix + "_treat_pileup.bdg"
     bdg_trim_treat.output = conf.prefix + "_treat_pileup.bdg.tmp"
@@ -232,9 +241,9 @@ def step4_prepare_macs2_peakcall(workflow, conf):
     bdg2bw_control.input["bdg"] = conf.prefix + "_treat_pileup.bdg.tmp"
     bdg2bw_control.output["bw"] = conf.prefix + "_treat.bw"
     attach_back(workflow, bdg2bw_control)
-    
+
     attach_back(workflow, PythonCommand(
-            qc_high_confident_peaks_draw,
+        qc_high_confident_peaks_draw,
         input={"macs2_peaks_xls": conf.prefix + "_peaks.xls",
                "R_template": R_cumulative_template,
                "latex_template": Latex_summary_report_template,
@@ -242,21 +251,22 @@ def step4_prepare_macs2_peakcall(workflow, conf):
         output={"rfile": conf.prefix + "_high_confident_peak_rate.R",
                 "latex_section": conf.prefix + "_high_confident.tex",
                 "pdf": conf.prefix + "_high_confident_peak_rate.pdf"},
-        param={"id": os.path.basename(conf.prefix)}))
+        param={"id": os.path.basename(conf.prefix)},
+        name="high_confident_peaks"
+    ))
+
 
 def step4_prepare_macs2_peakcall_on_rep(workflow, conf):
     # Though macs command already exists, I choose not to use prototype here
     # Because the prototype definition and usage might be far from each other, making codes not readable
 
-    macs2_run_list = []
     for target in conf.treatment_targets:
         macs2_on_rep = attach_back(workflow,
             ShellCommand(
                 "{tool} callpeak -B -q 0.01 --keep-dup {param[keep_dup]} --shiftsize={param[shiftsize]} --nomodel \
-                -t {input[treat]} -c {input[control]} -n {param[description]}",
+                {param[treat_opt]} {param[control_opt]} -n {param[description]}",
                 tool="macs2",
-                input={"treat": target + ".bam",
-                       "control": conf.prefix + "_control.bam"},
+                input={"treat": target + ".bam"},
                 output={"peaks": target + "_peaks.bed",
                         "summit": target + "_summits.bed",
                         "treat_bdg": target + "_treat_pileup.bdg",
@@ -265,8 +275,16 @@ def step4_prepare_macs2_peakcall_on_rep(workflow, conf):
                         "control_bdg": target + "_control_lambda.bdg"},
                 param={"description": target, "keep_dup": 1, "shiftsize": 73},
                 name="macs2_callpeak_rep"))
+        macs2_on_rep.param["treat_opt"] = "-t " + macs2_on_rep.input["treat"]
+        # control option is skipped if control samples does not exist
+        if len(conf.control_targets) >=1:
+            macs2_on_rep.input["control"] = conf.prefix + "_control.bam"
+            macs2_on_rep.param["control_opt"] = "-c " + macs2_on_rep.input["control"]
+        else:
+            macs2_on_rep.param["control_opt"] = ""
+
         macs2_on_rep.update(param=conf.items("macs2"))
-        macs2_run_list.append(macs2_on_rep)
+
 
 
 
@@ -298,7 +316,7 @@ def step4_prepare_macs2_peakcall_on_rep(workflow, conf):
         bdg2bw_controlrep.input = target + "_treat_pileup.bdg.tmp"
         bdg2bw_controlrep.output = target + "_treat.bw"
         attach_back(workflow, bdg2bw_controlrep)
-    
+
     attach_back(workflow,
         PythonCommand(
             qc_non_redundant_rate_draw,
@@ -310,6 +328,7 @@ def step4_prepare_macs2_peakcall_on_rep(workflow, conf):
                     "latex_section": conf.prefix + "_redundant.tex",
                     "pdf": conf.prefix + "_redundant_dist.pdf"},
             param={"ids": conf.treatment_bases}))
+
 
 def step4_prepare_macs2_venn_on_rep(workflow, conf):
     # awk and bedClip to remove outlier for venn and correlation plot
@@ -343,6 +362,7 @@ def step4_prepare_macs2_venn_on_rep(workflow, conf):
     venn_on_peaks.param = {"beds": " ".join(venn_on_peaks.input)}
     venn_on_peaks.allow_fail = True
 
+
 def step4_prepare_macs2_cor_on_rep(workflow, conf):
     cor_on_bw = attach_back(workflow,
         ShellCommand(
@@ -371,10 +391,8 @@ def step4_prepare_macs2_cor_on_rep(workflow, conf):
                    "Latex_summary_table": Latex_summary_report_template,
                    "cor_pdf": conf.prefix + "_cor.pdf",
                    "venn": conf.prefix + "_venn.png"},
-            output={"latex_section":  conf.prefix + "_replicates.tex"}))
+            output={"latex_section": conf.prefix + "_replicates.tex"}))
 
-
-    
 
 # def step5_prepare_DHS_overlap_annotation(workflow, conf):
 
@@ -399,7 +417,7 @@ def step4_prepare_macs2_cor_on_rep(workflow, conf):
 #            output = conf.prefix + "_DHSoverlap_peaks_bed",
 #            param = None))
 #    # DHS_velcro_latex = attach_back("qc_dhs_velcro")
-   
+
 def step5_prepare_ceas_annotation(workflow, conf):
     get_top_peaks = attach_back(workflow,
         ShellCommand(
@@ -471,8 +489,6 @@ def step5_prepare_phast_conservation_annotation(workflow, conf):
             input={"pdf": "tmp.pdf", "R": "tmp.R"},
             output={"pdf": conf.prefix + "conserv.pdf", "R": conf.prefix + "conserv.R"},
             name="convert pdf to png", ))
-
-
 
     conservation = attach_back(workflow,
         PythonCommand(
