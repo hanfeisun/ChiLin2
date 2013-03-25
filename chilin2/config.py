@@ -1,5 +1,7 @@
 from configparser import ConfigParser, NoSectionError, NoOptionError
 import os
+class NoTreatmentData(Exception):
+    pass
 
 class ChiLinConfig(object):
     def __init__(self, conf):
@@ -72,11 +74,17 @@ class ChiLinConfig(object):
 
     @property
     def control_raws(self):
-        return [self.to_abs_path(i.strip()) for i in self.get("Basis", "control").split(",")]
+        if self.get("Basis","control").strip():
+            return [self.to_abs_path(i.strip()) for i in self.get("Basis", "control").split(",")]
+        else:
+            return []
 
     @property
     def treatment_raws(self):
-        return [self.to_abs_path(i.strip()) for i in self.get("Basis", "treat").split(",")]
+        if self.get["Basis", "treat"].strip():
+            return [self.to_abs_path(i.strip()) for i in self.get("Basis", "treat").split(",")]
+        else:
+            raise NoTreatmentData
 
     @property
     def treatment_targets(self):
