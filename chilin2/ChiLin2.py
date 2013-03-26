@@ -499,7 +499,8 @@ def prepare_phast_conservation_annotation(workflow, conf):
         ShellCommand(
             "{tool} -resize 500x500 -density 50  {input[pdf]} {output[pdf]} && mv {input[R]} {output[R]}",
             tool="convert", ## width differs histone mark and TF
-            input={"pdf": "tmp.pdf", "R": "tmp.R"},
+            input={"pdf":conf.prefix + "_conserv_tmp.pdf",
+                   "R":conf.prefix + "_conserv_tmp.R"},
             output={"pdf": conf.prefix + "conserv.pdf", "R": conf.prefix + "conserv.R"},
             name="convert pdf to png", ))
 
