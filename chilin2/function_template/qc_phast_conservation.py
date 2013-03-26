@@ -8,7 +8,7 @@ def _euclidian_distance(x,y):
     assert len(x) == len(y)
     sum_of_square = 0
     for x_i, y_i in zip(x,y):
-        sum_of_square += (x_i - y_i) ^ 2
+        sum_of_square += pow((x_i - y_i), 2)
     distance=round(math.sqrt(sum_of_square,4))
     return distance
 
