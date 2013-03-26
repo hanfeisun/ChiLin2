@@ -47,12 +47,14 @@ def parse_args(args=None):
         description="ChiLin-run: Run ChiLin pipeline using a config file")
     parser_run.add_argument("-c", "--config", dest="config", required=True,
         help="specify the config file to use", )
-    parser_run.add_argument("-m", dest="cor_method", default="mean", choices=("mean",),
-        help="specify method for correlation plot")
-    parser_run.add_argument("-p", dest="top_peaks", type=int, default=5000,
-        help="specify peaks number for CEAS")
-    parser_run.add_argument("--threads", dest="max_threads", type=int, default=1, choices=range(1, 9),
-        help="How many threads can be used")
+
+    parser_run.add_argument("--from", dest = "start_step", default = 0, type = int,
+        help = "Only step after this number will be processed")
+    parser_run.add_argument("--to", dest = "end_step", default = 100, type = int,
+        help = "Only step before this number will be processed ")
+    parser_run.add_argument("--skip", dest = "skip_step", default = "",
+        help = "Steps to skip, use comma as seperator")
+
     parser_run.add_argument("-v", "--verbose-level", dest="verbose_level", type=int, default=2)
     parser_run.add_argument("--dry-run", dest="dry_run", action="store_true", default=False)
     parser_run.add_argument("--allow-dangling", dest="allow_dangling", action="store_true", default=False)
@@ -68,7 +70,7 @@ def make_copy_command(orig, dest):
         name = "copy")
 
 
-def step1_prepare_groom_sequencing_files(workflow, conf):
+def prepare_groom_sequencing_files(workflow, conf):
     """
     Return the file name pair (raw, target) that can't be groomed (neither fastq nor bam)
     These files (maybe BED files) can be captured and processed by other tools later
@@ -92,7 +94,7 @@ def step1_prepare_groom_sequencing_files(workflow, conf):
     return not_groomed
 
 
-def step2_prepare_raw_QC(workflow, conf):
+def prepare_raw_QC(workflow, conf):
     for target in conf.sample_targets:
         fastqc_run = attach_back(workflow,
             ShellCommand(
@@ -118,7 +120,7 @@ def step2_prepare_raw_QC(workflow, conf):
                    "id": conf.id}))
 
 
-def step3_prepare_bowtie_map(workflow, conf):
+def prepare_bowtie_map(workflow, conf):
     for target in conf.sample_targets:
         bowtie_map = attach_back(workflow,
             ShellCommand(
@@ -146,7 +148,7 @@ def step3_prepare_bowtie_map(workflow, conf):
         param={"ids": conf.sample_bases}))
 
 
-def step4_prepare_macs2_peakcall(workflow, conf):
+def prepare_macs2_peakcall(workflow, conf):
     # convert the files from SAM to BAM format
     for target in conf.sample_targets:
         attach_back(workflow,
@@ -256,7 +258,7 @@ def step4_prepare_macs2_peakcall(workflow, conf):
     ))
 
 
-def step4_prepare_macs2_peakcall_on_rep(workflow, conf):
+def prepare_macs2_peakcall_on_rep(workflow, conf):
     # Though macs command already exists, I choose not to use prototype here
     # Because the prototype definition and usage might be far from each other, making codes not readable
 
@@ -330,7 +332,7 @@ def step4_prepare_macs2_peakcall_on_rep(workflow, conf):
             param={"ids": conf.treatment_bases}))
 
 
-def step4_prepare_macs2_venn_on_rep(workflow, conf):
+def prepare_macs2_venn_on_rep(workflow, conf):
     # awk and bedClip to remove outlier for venn and correlation plot
     for target in conf.treatment_targets:
         bed_filter = attach_back(workflow,
@@ -371,7 +373,7 @@ def step4_prepare_macs2_venn_on_rep(workflow, conf):
     )
 
 
-def step4_prepare_macs2_cor_on_rep(workflow, conf):
+def prepare_macs2_cor_on_rep(workflow, conf):
     cor_on_bw = attach_back(workflow,
         ShellCommand(
             template=
@@ -425,7 +427,7 @@ def step4_prepare_macs2_cor_on_rep(workflow, conf):
 #            param = None))
 #    # DHS_velcro_latex = attach_back("qc_dhs_velcro")
 
-def step5_prepare_ceas_annotation(workflow, conf):
+def prepare_ceas_annotation(workflow, conf):
     get_top_peaks = attach_back(workflow,
         ShellCommand(
             "{tool} -r -g -k 5 {input} | head -n {param[peaks]} > {output}",
@@ -467,7 +469,7 @@ def step5_prepare_ceas_annotation(workflow, conf):
                     },))
 
 
-def step5_prepare_phast_conservation_annotation(workflow, conf):
+def prepare_phast_conservation_annotation(workflow, conf):
     get_top_peaks = attach_back(workflow,
         ShellCommand(
             "{tool} -r -g -k 5 {input} | head -n {param[peaks]} > {output}",
@@ -480,17 +482,18 @@ def step5_prepare_phast_conservation_annotation(workflow, conf):
     conservation = attach_back(workflow,
         ShellCommand(
             "{tool} -t Conservation_at_summits \
-            -d {input[phast]} -l Peak_summits {input[bed]} -w {param[width]}",
-            tool="conservation_plot.py",
-            input={"bed": conf.prefix + "_summits_topconserv.bed",
-                   "phast": conf.get_path("lib", "phast")},
+            -d {input[phast]} -l Peak_summits {input[bed]} -w {param[width]} &&\
+            mv tmp.pdf {output[pdf]} && \
+            mv tmp.R {output[R]}",
 
-            # TODO(Qian): (1) Change to a better name (2) Output to the output dir, not current dir
-            # this is program default output result
-            output=["tmp.pdf", "tmp.R"],
-            param={"width": 4000, },
-            name="conservation"))
-    conservation.update(param=conf.items('conservation'))
+            tool = "conservation_plot.py",
+            input = {"bed" : conf.prefix + "_summits_topconserv.bed",
+                     "phast" : conf.get_path("lib", "phast")},
+            output = {"pdf":conf.prefix + "_conserv_tmp.pdf",
+                      "R":conf.prefix + "_conserv_tmp.R"},
+            param = {"width": 4000},
+            name= "conservation"))
+    conservation.update(param = conf.items('conservation'))
 
     attach_back(workflow,
         ShellCommand(
@@ -515,7 +518,7 @@ def step5_prepare_phast_conservation_annotation(workflow, conf):
     conservation.param.update({})
 
 
-def step5_prepare_mdseqpos_annotation(workflow, conf):
+def prepare_mdseqpos_annotation(workflow, conf):
     # This will work for only Human and Mouse
     # MDseqpos take uniform input, we need to remove random sequence part and get top 1000 summits
     get_top_summits = attach_back(workflow,
@@ -545,12 +548,26 @@ def step5_prepare_mdseqpos_annotation(workflow, conf):
             name="mv seqpos"))
 
 
-def step6_prepare_report_summary(workflow, conf):
+def prepare_report_summary(workflow, conf):
     attach_back(workflow,
         ShellCommand(name="report"))
 
 
-def create_workflow(args, conf):
+class StepChecker:
+    def __init__(self, start, end, skips):
+        self.start = start
+        self.end = end
+        self.skips = skips
+    def need_run(self, step_id):
+        if step_id < self.start:
+            return False
+        if step_id > self.end:
+            return False
+        if step_id in self.skips:
+            return False
+        return True
+
+def create_workflow(args, conf, step_checker : StepChecker):
     """
     :type conf:ChiLinConfig
     """
@@ -560,39 +577,64 @@ def create_workflow(args, conf):
     attach_back(workflow,
         ShellCommand(
             "if [ ! -d '{output}' ]; then mkdir -p {output}; fi",
-            output=conf.target_dir))
+            output = conf.target_dir))
 
     # Whether there are replicates for treatment group
     have_reps = len(conf.treatment_pairs) >= 2
 
-    step1_prepare_groom_sequencing_files(workflow, conf)
-    step2_prepare_raw_QC(workflow, conf)
-    step3_prepare_bowtie_map(workflow, conf)
-    step4_prepare_macs2_peakcall(workflow, conf)
-    if have_reps:
-        step4_prepare_macs2_peakcall_on_rep(workflow, conf)
-        step4_prepare_macs2_venn_on_rep(workflow, conf)
-        step4_prepare_macs2_cor_on_rep(workflow, conf)
-    step5_prepare_ceas_annotation(workflow, conf)
-    if conf.get('Basis', 'species') == "hg19":
-        pass # TODO
-    step5_prepare_phast_conservation_annotation(workflow, conf)
-    step5_prepare_mdseqpos_annotation(workflow, conf)
-    return workflow
+    need_run = step_checker.need_run
 
+    if need_run(1):
+        prepare_groom_sequencing_files(workflow, conf)
+
+    if need_run(2):
+        prepare_raw_QC(workflow, conf)
+
+    if need_run(3):
+        prepare_bowtie_map(workflow, conf)
+
+    if need_run(4):
+        prepare_macs2_peakcall(workflow, conf)
+
+    if have_reps:
+        if need_run(5):
+            prepare_macs2_peakcall_on_rep(workflow, conf)
+
+        if need_run(6):
+            prepare_macs2_venn_on_rep(workflow, conf)
+
+        if need_run(7):
+            prepare_macs2_cor_on_rep(workflow, conf)
+
+    if need_run(8):
+        prepare_ceas_annotation(workflow, conf)
+
+    if need_run(9):
+        prepare_phast_conservation_annotation(workflow, conf)
+
+    if need_run(10):
+        prepare_mdseqpos_annotation(workflow, conf)
+    return workflow
 
 def main(args=None):
     args = parse_args(args)
     print("Arguments:", args)
+
     conf = ChiLinConfig(args.config)
-    workflow = create_workflow(args, conf)
+    step_checker = StepChecker(args.start_step, args.end_step, args.skip_step.split(","))
+
+    workflow = create_workflow(args, conf, step_checker)
+
     workflow.set_option(
-        verbose_level=args.verbose_level,
-        dry_run_mode=args.dry_run,
-        resume=args.resume,
-        allow_dangling=args.allow_dangling)
+        verbose_level = args.verbose_level,
+        dry_run_mode = args.dry_run,
+        resume = args.resume,
+        allow_dangling = args.allow_dangling)
 
     workflow.invoke()
+
+
+
 
 
 if __name__ == "__main__":
