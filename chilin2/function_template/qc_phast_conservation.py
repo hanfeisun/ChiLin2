@@ -9,11 +9,11 @@ def _euclidian_distance(x,y):
     sum_of_square = 0
     for x_i, y_i in zip(x,y):
         sum_of_square += pow((x_i - y_i), 2)
-    distance=round(math.sqrt(sum_of_square,4))
+    distance=round(math.sqrt(sum_of_square), 4)
     return distance
 
 # TODO (Shenglin): Why should conservationPDF use here as input?
-def qc_conservation_draw(input={"conservationR": "","historical_conservation_cluster_text": ""},
+def qc_conservation_draw(input={"conservationR": "","historical_conservation_cluster_text": "", "latex_template":""},
                         output={"rfile": "","pdf": "","latex_SummaryTable":""},
                         param = {"id":""}):
     """
@@ -53,8 +53,8 @@ def qc_conservation_draw(input={"conservationR": "","historical_conservation_clu
     value = [str(i) for i in value]
     ymax = max(value+judgevalue)
     ymin = min(value+judgevalue)
-    with open(input["rfile"],'w') as f:
-        f.write("pdf('%s',height=8.5,width=8.5)\n" % input["pdf"])
+    with open(output["rfile"],'w') as f:
+        f.write("pdf('%s',height=8.5,width=8.5)\n" % output["pdf"])
         f.write("%s\n" % xlab)
         f.write("y1<-c(%s)\n" % ','.join(judgevalue))
         f.write("y2<-c(%s)\n" % ','.join(value))
@@ -74,7 +74,7 @@ def qc_conservation_draw(input={"conservationR": "","historical_conservation_clu
     latex_summary_table = ['Conservation QC','dataset%s'%param["id"], '%f' % round(min(scoreList),3),' ','%s'%judge]
 
     # TODO (Shenglin): don't use append, use a separate file for each qc function in the same folder
-    with open(output["latex_SummaryTable"],"a+") as f:
+    with open(output["latex_section"],"a+") as f:
         f.write('\t'.join(latex_summary_table)+'\n')
 
     conservation_latex = JinjaTemplateCommand(

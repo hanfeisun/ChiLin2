@@ -481,7 +481,7 @@ def step5_prepare_phast_conservation_annotation(workflow, conf):
             # TODO(Qian): (1) Change to a better name (2) Output to the output dir, not current dir
             # this is program default output result
             output=["tmp.pdf", "tmp.R"],
-            param={"width": 4000},
+            param={"width": 4000, },
             name="conservation"))
     conservation.update(param=conf.items('conservation'))
 
@@ -497,10 +497,12 @@ def step5_prepare_phast_conservation_annotation(workflow, conf):
         PythonCommand(
             qc_conservation_draw,
             input={"conservationR": conf.prefix + "conserv.R",
-                   "historical_conservation_cluster_text": resource_filename("chilin2", "db/TF_centers.txt")},
+                   "historical_conservation_cluster_text": resource_filename("chilin2", "db/TF_centers.txt"),
+                   "latex_template": Latex_summary_report_template},
             output={"rfile": conf.prefix + "_qc_conserv_compare.R",
-                    "pdf": conf.prefix + "_qc_conserv_compare.pdf"},
-            param={"atype": conf.get("Basis", "type", "TF")})
+                    "pdf": conf.prefix + "_qc_conserv_compare.pdf",
+                    "latex_section": conf.prefix + "_conserv_qc.tex"},
+            param={"atype": conf.get("Basis", "type", "TF"), "id": conf.id})
     )
 
     conservation.param.update({})
