@@ -39,7 +39,7 @@ def qc_replicate_parse(input={"correlation_R":"", "cor_pdf": "", "venn": "", "la
     return {}
 
 
-def qc_venn(input = {"venn": "", "latex_template": ""}, output = {"latex_section": ""}):
+def qc_venn(input = {"venn": "", "latex_template": ""}, output = {"latex_section": ""}, param=None):
     venn_latex = JinjaTemplateCommand(
         name = "venn diagram latex",
 
