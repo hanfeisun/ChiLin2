@@ -441,10 +441,11 @@ def step5_prepare_ceas_annotation(workflow, conf):
                    "chrom_len": conf.get_path("lib", "chrom_len")},
             output={"R": conf.prefix + "_ceas.R",
                     "pdf": conf.prefix + "_ceas.pdf"},
-            param={"description": conf.prefix},
+            param={"description": conf.prefix + "_ceas"},
+            # `description` is the prefix of output, so "_ceas" here is need
             name="ceas"))
     ceas.update(param=conf.items("ceas"))
-    ceas.allow_fail = True
+
 
     attach_back(workflow,
         PythonCommand(
@@ -452,9 +453,11 @@ def step5_prepare_ceas_annotation(workflow, conf):
             input={"macs2_peaks_xls": conf.prefix + "_peaks.xls",
                    "ceas_rscript": conf.prefix + "_ceas.R",
                    "latex_template": Latex_summary_report_template},
-            output={"rfile": "_qc_ceas.R",
+            output={"rfile": conf.prefix + "_qc_ceas.R",
                     "peakheight_and_pie_pdf": conf.prefix + "_peakheight_and_pie.pdf",
-                    "metagene_dist_pdf": conf.prefix + "_metagene_dist.pdf"}))
+                    "metagene_dist_pdf": conf.prefix + "_metagene_dist.pdf",
+                    "latex_section": conf.prefix + "_ceas_qc.tex",
+                    },))
 
 
 def step5_prepare_phast_conservation_annotation(workflow, conf):
