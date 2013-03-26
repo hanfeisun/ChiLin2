@@ -2,3 +2,8 @@ syntax: glob
 
 
 chilin_env
+ChiLin2.iml
+test/testB_output
+test/testA_output
+*.orig
+build
