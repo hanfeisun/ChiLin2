@@ -3,7 +3,7 @@ separate latex template to several object
 """
 import subprocess
 from jinja2 import Environment, FileSystemLoader, PackageLoader
-from pyflow.command import AbstractCommand
+from pyflow.command import AbstractCommand, ShellCommand
 
 env = Environment(loader = FileSystemLoader("/"),
     block_start_string = '\BLOCK{',
@@ -47,7 +47,10 @@ def write_into(jinja_template, file_path):
 
 def write_and_run_Rscript(jinja_template_r, file_path):
     write_into(jinja_template_r, file_path)
-    subprocess.call("Rscript %s" %file_path, shell=True)
+    # Use ShellCommand as it displays more friendly
+    ShellCommand(template="Rscript {input}", input=file_path).invoke()
+
+
 
 
 
