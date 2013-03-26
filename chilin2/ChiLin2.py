@@ -388,7 +388,7 @@ def step4_prepare_macs2_cor_on_rep(workflow, conf):
         PythonCommand(
             qc_replicate_parse,
             input={"correlation_R": conf.prefix + "_cor.R",
-                   "Latex_summary_table": Latex_summary_report_template,
+                   "latex_template": Latex_summary_report_template,
                    "cor_pdf": conf.prefix + "_cor.pdf",
                    "venn": conf.prefix + "_venn.png"},
             output={"latex_section": conf.prefix + "_replicates.tex"}))
