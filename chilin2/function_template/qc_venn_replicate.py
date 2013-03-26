@@ -31,10 +31,22 @@ def qc_replicate_parse(input={"correlation_R":"", "cor_pdf": "", "venn": "", "la
     replicate_latex = JinjaTemplateCommand(
             name = "venn and correlation",
             template = input["latex_template"],
-            param = {"section_name": "replication",
-                     "venn_graph": input["venn"],
+            param = {"section_name": "correlation",
                      "correlation_graph": input["cor_pdf"]})
     replicate_latex.allow_fail = True
     
     write_into(replicate_latex, output["latex_section"])
     return {}
+
+
+def qc_venn(input = {"venn": "", "latex_template": ""}, output = {"latex_section": ""}):
+    venn_latex = JinjaTemplateCommand(
+        name = "venn diagram latex",
+
+        template = input["latex_template"],
+        param = {"section_name": "venn",
+                 "venn_graph": input["venn"],
+                 }
+    )
+    venn_latex.allow_fail = True
+    write_into(venn_latex, output["latex_section"])

@@ -12,7 +12,7 @@ from pkg_resources import resource_filename
 from chilin2.function_template.qc_bowtie import qc_bowtie_summary_draw
 from chilin2.function_template.qc_fastqc_raw_sequence import python_fastqc_dist_draw
 from chilin2.function_template.qc_macs2 import qc_high_confident_peaks_draw, qc_non_redundant_rate_draw
-from chilin2.function_template.qc_venn_replicate import qc_replicate_parse
+from chilin2.function_template.qc_venn_replicate import qc_replicate_parse, qc_venn
 from chilin2.function_template.qc_ceas import qc_redraw_ceas_graph
 from chilin2.function_template.qc_phast_conservation import qc_conservation_draw
 
@@ -63,9 +63,9 @@ def parse_args(args=None):
 def make_copy_command(orig, dest):
     return ShellCommand(
         "cp {input} {output}",
-        input=orig,
-        output=dest,
-        name="copy")
+        input = orig,
+        output = dest,
+        name = "copy")
 
 
 def step1_prepare_groom_sequencing_files(workflow, conf):
@@ -85,7 +85,7 @@ def step1_prepare_groom_sequencing_files(workflow, conf):
                     name="groom"))
 
         elif re.search(r"\.(fastq|fq)", raw, re.I):
-            attach_back(workflow, make_copy_command(orig=raw, dest=target + ".fastq"))
+            attach_back(workflow, make_copy_command(orig = raw, dest= target + ".fastq"))
         else:
             print(raw, " is neither fastq nor bam file. Skip grooming.")
             not_groomed.append([raw, target])
@@ -361,6 +361,14 @@ def step4_prepare_macs2_venn_on_rep(workflow, conf):
             output=conf.prefix + "_venn.png", name="venn_diagram"))
     venn_on_peaks.param = {"beds": " ".join(venn_on_peaks.input)}
     venn_on_peaks.allow_fail = True
+    venn_qc = attach_back(workflow,
+        PythonCommand(
+            qc_venn,
+            input = {"venn": conf.prefix + "_venn.png",
+                     "latex_template": Latex_summary_report_template},
+            output = {"latex_section": conf.prefix + "_venn.tex"}
+        )
+    )
 
 
 def step4_prepare_macs2_cor_on_rep(workflow, conf):
@@ -384,14 +392,13 @@ def step4_prepare_macs2_cor_on_rep(workflow, conf):
     cor_on_bw.update(param=conf.items("correlation"))
     cor_on_bw.allow_fail = True
 
-    venn_qc = attach_back(workflow,
+    cor_qc = attach_back(workflow,
         PythonCommand(
             qc_replicate_parse,
             input={"correlation_R": conf.prefix + "_cor.R",
                    "latex_template": Latex_summary_report_template,
-                   "cor_pdf": conf.prefix + "_cor.pdf",
-                   "venn": conf.prefix + "_venn.png"},
-            output={"latex_section": conf.prefix + "_replicates.tex"}))
+                   "cor_pdf": conf.prefix + "_cor.pdf"},
+            output={"latex_section":  conf.prefix + "_cor.tex"}))
 
 
 # def step5_prepare_DHS_overlap_annotation(workflow, conf):
