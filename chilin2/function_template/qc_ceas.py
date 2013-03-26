@@ -1,5 +1,6 @@
 import re
 import os
+from pyflow.command import ShellCommand
 from chilin2.jinja_template_render import JinjaTemplateCommand, write_into
 
 def qc_redraw_ceas_graph(input={"macs2_peaks_xls": "", "ceas_rscript": "", "latex_template": ""},
@@ -55,17 +56,19 @@ def qc_redraw_ceas_graph(input={"macs2_peaks_xls": "", "ceas_rscript": "", "late
         r_file.write('ma <- max(fdd1[,1])\n')
         r_file.write('mi <- min(fdd1[,1])\n')
         r_file.write("plot(fdd2,type='p',col='blue',pch=18,main='Peaks distribution',xlab='Fold change of peaks',ylab='Fn(fold change of peaks)')\n")
-        r_file.write(pie_chart_r_codes)
+        r_file.write(pie_chart_r_codes + "\n")
         r_file.write('dev.off()\n')
         
         # R codes for MetaGene Distribution
         r_file.write('# the graph of MetaGene Distribution \n\n')
         r_file.write("pdf('%s',height=7,width=5.5)\n" %output["metagene_dist_pdf"])
         r_file.write("nf <- layout(matrix(c(1,2,3,3), 2, 2, byrow=TRUE), width= c(1,1),height=c(1,1),respect=TRUE)\n")
-        r_file.write(metagene_dist_r_codes)
+        r_file.write(metagene_dist_r_codes + "\n")
         r_file.write('dev.off()\n')
 
-    os.system('Rscript %s' % output["rfile"])
+    ShellCommand(template="Rscript {input}", input = output["rfile"]).invoke()
+
+
 
     ceas_latex = JinjaTemplateCommand(
         name = "ceas redraw",
