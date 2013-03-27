@@ -622,8 +622,13 @@ def main(args=None):
     print("Arguments:", args)
 
     conf = ChiLinConfig(args.config)
-    step_checker = StepChecker(args.start_step, args.end_step,
-        [int(a_step) for a_step in args.skip_step.split(",")])
+    if args.skip_step:
+        skipped_steps = [int(i) for i in args.skip_step.split(",")]
+    else:
+        skipped_steps = []
+
+    step_checker = StepChecker(args.start_step, args.end_step, skipped_steps)
+
 
     workflow = create_workflow(args, conf, step_checker)
 
