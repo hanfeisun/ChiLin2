@@ -181,7 +181,7 @@ def prepare_macs2_peakcall(workflow, conf):
         merge_bams_control.param = {"bams": " ".join(merge_bams_control.input)}
         attach_back(workflow, merge_bams_control)
     elif len(conf.control_targets) == 1:
-        attach_back(workflow, make_copy_command(conf.control_targets[0], conf.prefix + "_control.bam"))
+        attach_back(workflow, make_copy_command(conf.control_targets[0] + ".bam", conf.prefix + "_control.bam"))
 
 
 
