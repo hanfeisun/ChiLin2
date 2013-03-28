@@ -13,16 +13,15 @@ def _extract_traverse_tree(tree):
     return result_list
 
 # TODO: parse ?
-def qc_mdseqpos_parse_and_filter_by_z_score(input = "" , output="", param = {"z_score_cutoff":-15}):
+def qc_mdseqpos_parse_and_filter_by_z_score(input = {"latex_template": "", "seqpos": ""}, output={"latex_section": ""}, param = {"z_score_cutoff":-15}):
     """parrase mdsepose html file"""
     z_score_cutoff = param["z_score_cutoff"]
-    seqpos_html_content = open(input).read()
+    seqpos_html_content = open(input['seqpos']).read()
     motif_tree_json_content = re.findall(
-        r"^var mtree = (.*)$",
+        r'var mtree = (.*)',
         seqpos_html_content)[0]
-
+    # encodedjson = json.dumps(motif_tree_json_content)
     motif_tree_dict = json.loads(motif_tree_json_content)
-
     all_motif_list = _extract_traverse_tree(motif_tree_dict)
     satisfied_motif_list = []
     satisfied_count = 0

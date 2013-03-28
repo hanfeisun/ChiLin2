@@ -15,6 +15,7 @@ from chilin2.function_template.qc_macs2 import qc_high_confident_peaks_draw, qc_
 from chilin2.function_template.qc_venn_replicate import qc_replicate_parse, qc_venn
 from chilin2.function_template.qc_ceas import qc_redraw_ceas_graph
 from chilin2.function_template.qc_phast_conservation import qc_conservation_draw
+from chilin2.function_template.qc_mdseqpos import qc_mdseqpos_parse_and_filter_by_z_score
 
 
 ChiLinQC_db = resource_filename("chilin2", "db/ChiLinQC.db")
@@ -511,7 +512,8 @@ def prepare_phast_conservation_annotation(workflow, conf):
                    "historical_conservation_cluster_text": resource_filename("chilin2", "db/TF_centers.txt"),
                    "latex_template": Latex_summary_report_template},
             output={"rfile": conf.prefix + "_qc_conserv_compare.R",
-                    "pdf": conf.prefix + "_qc_conserv_compare.pdf",
+                    "compare_pdf": conf.prefix + "_qc_conserv_compare.pdf",
+                    "pdf": conf.prefix + "conserv.pdf",
                     "latex_section": conf.prefix + "_conserv_qc.tex"},
             param={"atype": conf.get("Basis", "type", "TF"), "id": conf.id})
     )
@@ -547,12 +549,34 @@ def prepare_mdseqpos_annotation(workflow, conf):
             input="results",
             output=conf.prefix + "_seqpos",
             name="mv seqpos"))
+    # attach_back(workflow,
+    #     PythonCommand(
+    #         qc_mdseqpos_parse_and_filter_by_z_score,
+    #         input = {"seqpos": conf.prefix + "_seqpos/" + "mdseqpos_out.html",
+    #                  "latex_template": Latex_summary_report_template},
+    #         output = {"latex_section": conf.prefix + "_seqpos.tex"},
+    #         param = {"z_score_cutoff": -15}))
 
-
-def prepare_report_summary(workflow, conf):
+def cat_latex(input = "", output = "", param = {"latex_combined": ""}):
+    with open(output, "w") as f:
+        content = ""
+        for latex in param["latex_combined"]:
+            content += open(latex).read()
+        f.write(content)
+    f.close()
+    
+def prepare_report_summary(workflow, conf, latex_combined):
+    cat = attach_back(workflow,
+                      PythonCommand(cat_latex,
+                                    output = conf.prefix + "_report.tex"))
+    cat.param.update({"latex_combined": latex_combined})
     attach_back(workflow,
-        ShellCommand(name="report"))
-
+        ShellCommand(
+            "{tool} {input} && {tool} {input}",
+            "pdflatex",
+            input = conf.prefix + "_report.tex",
+            output = conf.prefix + "_report.pdf",
+            name="report"))
 
 class StepChecker:
     def __init__(self, start, end, skips):
@@ -585,36 +609,49 @@ def create_workflow(args, conf, step_checker : StepChecker):
 
     need_run = step_checker.need_run
 
+    latex_combined = []
+
     if need_run(1):
         prepare_groom_sequencing_files(workflow, conf)
 
     if need_run(2):
         prepare_raw_QC(workflow, conf)
+        latex_combined.append(conf.prefix + "_raw_sequence_qc.tex")        
 
     if need_run(3):
         prepare_bowtie_map(workflow, conf)
+        latex_combined.append(conf.prefix + "_mappable.tex")        
 
     if need_run(4):
         prepare_macs2_peakcall(workflow, conf)
+        latex_combined.append(conf.prefix + "_high_confident.tex")
 
     if have_reps:
         if need_run(5):
             prepare_macs2_peakcall_on_rep(workflow, conf)
+            latex_combined.append(conf.prefix + "_redundant.tex")
 
         if need_run(6):
             prepare_macs2_venn_on_rep(workflow, conf)
+            latex_combined.append(conf.prefix + "_venn.tex")            
 
         if need_run(7):
             prepare_macs2_cor_on_rep(workflow, conf)
+            latex_combined.append(conf.prefix + "_cor.tex")            
 
     if need_run(8):
         prepare_ceas_annotation(workflow, conf)
+        latex_combined.append(conf.prefix + "_ceas_qc.tex")
 
     if need_run(9):
         prepare_phast_conservation_annotation(workflow, conf)
+        latex_combined.append(conf.prefix + "_conserv_qc.tex")        
 
     if need_run(10):
         prepare_mdseqpos_annotation(workflow, conf)
+        # latex_combined.append(conf.prefix + "_seqpos.tex")
+        
+    prepare_report_summary(workflow, conf, latex_combined)
     return workflow
 
 def main(args=None):

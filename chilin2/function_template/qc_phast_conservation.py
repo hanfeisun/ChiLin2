@@ -14,7 +14,7 @@ def _euclidian_distance(x,y):
 
 # TODO (Shenglin): Why should conservationPDF use here as input?
 def qc_conservation_draw(input={"conservationR": "","historical_conservation_cluster_text": "", "latex_template":""},
-                        output={"rfile": "","pdf": "","latex_SummaryTable":""},
+                        output={"rfile": "","compare_pdf": "", "pdf": "", "latex_SummaryTable":""},
                         param = {"id":""}):
     """
     For TFcenters data 1,2,3 pass, 4,5,6 fail
@@ -54,7 +54,7 @@ def qc_conservation_draw(input={"conservationR": "","historical_conservation_clu
     ymax = max(value+judgevalue)
     ymin = min(value+judgevalue)
     with open(output["rfile"],'w') as f:
-        f.write("pdf('%s',height=8.5,width=8.5)\n" % output["pdf"])
+        f.write("pdf('%s',height=8.5,width=8.5)\n" % output["compare_pdf"])
         f.write("%s\n" % xlab)
         f.write("y1<-c(%s)\n" % ','.join(judgevalue))
         f.write("y2<-c(%s)\n" % ','.join(value))
@@ -81,8 +81,8 @@ def qc_conservation_draw(input={"conservationR": "","historical_conservation_clu
         name = "conservation",
         template = input["latex_template"],
         param={"section_name": "conservation",
+               "conservation_compare_graph": output["compare_pdf"],
                "conservation_graph": output["pdf"]})
-
     
     write_into(conservation_latex, output["latex_section"])
     return {}
