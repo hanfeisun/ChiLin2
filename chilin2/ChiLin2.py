@@ -182,7 +182,7 @@ def prepare_macs2_peakcall(workflow, conf):
         merge_bams_control.param = {"bams": " ".join(merge_bams_control.input)}
         attach_back(workflow, merge_bams_control)
     elif len(conf.control_targets) == 1:
-        attach_back(workflow, make_copy_command(conf.control_targets[0], conf.prefix + "_control.bam"))
+        attach_back(workflow, make_copy_command(conf.control_targets[0] + ".bam", conf.prefix + "_control.bam"))
 
 
 
@@ -659,7 +659,13 @@ def main(args=None):
     print("Arguments:", args)
 
     conf = ChiLinConfig(args.config)
-    step_checker = StepChecker(args.start_step, args.end_step, args.skip_step.split(","))
+    if args.skip_step:
+        skipped_steps = [int(i) for i in args.skip_step.split(",")]
+    else:
+        skipped_steps = []
+
+    step_checker = StepChecker(args.start_step, args.end_step, skipped_steps)
+
 
     workflow = create_workflow(args, conf, step_checker)
 
