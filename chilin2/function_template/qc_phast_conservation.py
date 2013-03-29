@@ -1,7 +1,7 @@
 import re
 import os
 import math
-from pyflow.helper import fetch
+from samflow.helper import fetch
 from chilin2.jinja_template_render import JinjaTemplateCommand, write_into
 
 def _euclidian_distance(x,y):
