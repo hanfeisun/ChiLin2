@@ -1,6 +1,6 @@
 import re
 import sqlite3
-from pyflow.command import ThrowableShellCommand
+from samflow.command import ThrowableShellCommand
 from chilin2.jinja_template_render import JinjaTemplateCommand, write_and_run_Rscript, write_into
 
 def _python_fastqc_parse(input, output=None, param=None):

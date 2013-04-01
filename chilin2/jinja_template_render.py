@@ -3,7 +3,7 @@ separate latex template to several object
 """
 import subprocess
 from jinja2 import Environment, FileSystemLoader, PackageLoader
-from pyflow.command import AbstractCommand, ShellCommand
+from samflow.command import AbstractCommand, ShellCommand
 
 env = Environment(loader = FileSystemLoader("/"),
     block_start_string = '\BLOCK{',

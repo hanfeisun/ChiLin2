@@ -1,7 +1,7 @@
 import os
 import sqlite3
 import math
-from pyflow.command import ShellCommand, ThrowableShellCommand
+from samflow.command import ShellCommand, ThrowableShellCommand
 
 from chilin2.jinja_template_render import JinjaTemplateCommand, write_and_run_Rscript, write_into
 

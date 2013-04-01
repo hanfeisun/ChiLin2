@@ -5,8 +5,8 @@ import sys
 import re
 import argparse
 from os.path import basename
-from pyflow.command import ShellCommand, PythonCommand
-from pyflow.workflow import Workflow, attach_back
+from samflow.command import ShellCommand, PythonCommand
+from samflow.workflow import Workflow, attach_back
 from chilin2.config import ChiLinConfig
 from pkg_resources import resource_filename
 from chilin2.function_template.qc_bowtie import qc_bowtie_summary_draw

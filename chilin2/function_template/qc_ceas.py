@@ -1,6 +1,6 @@
 import re
 import os
-from pyflow.command import ShellCommand
+from samflow.command import ShellCommand
 from chilin2.jinja_template_render import JinjaTemplateCommand, write_into
 
 def qc_redraw_ceas_graph(input={"macs2_peaks_xls": "", "ceas_rscript": "", "latex_template": ""},
