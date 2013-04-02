@@ -16,11 +16,12 @@ from chilin2.function_template.qc_venn_replicate import qc_replicate_parse, qc_v
 from chilin2.function_template.qc_ceas import qc_redraw_ceas_graph
 from chilin2.function_template.qc_phast_conservation import qc_conservation_draw
 from chilin2.function_template.qc_mdseqpos import qc_mdseqpos_parse_and_filter_by_z_score
-
+from chilin2.function_template.data_summary import bowtie_summary
 
 ChiLinQC_db = resource_filename("chilin2", "db/ChiLinQC.db")
 R_cumulative_template = resource_filename("chilin2", "jinja_template/R_culmulative_plot.R.jinja2")
 Latex_summary_report_template = resource_filename("chilin2", "jinja_template/Latex_summary_report.jinja2")
+data_summary_report_template = resource_filename("chilin2", "jinja_template/data_summary.jinja2")
 
 
 class FriendlyArgumentParser(argparse.ArgumentParser):
@@ -120,7 +121,6 @@ def prepare_raw_QC(workflow, conf):
             param={"ids": conf.sample_bases,
                    "id": conf.id}))
 
-
 def prepare_bowtie_map(workflow, conf):
     for target in conf.sample_targets:
         bowtie_map = attach_back(workflow,
@@ -137,7 +137,15 @@ def prepare_bowtie_map(workflow, conf):
                        "genome_index": conf.get_path("lib", "genome_index")}))
 
         bowtie_map.update(param=conf.items("bowtie"))
-
+    ## bowtie data summary
+    ## using bowtie standard error output and macs2 replicates peaks.xls information
+    bowtie_data_summary = attach_back(workflow,
+                                      PythonCommand(bowtie_summary,
+                                               input = {"data_template": data_summary_report_template, "sam_files": [ t + ".sam" for t in conf.sample_targets]},
+                                               output = {"sum_section": conf.prefix + "_all_bowtie_summary"},
+                                               param = {"bowtie_summary": [t + "_bowtie_summary.txt" for t in conf.sample_targets ]}))
+                                                        # "peaks_xls": [ t + "_peaks.xls" for t in conf.treatment_targets ]}))
+    
     attach_back(workflow, PythonCommand(qc_bowtie_summary_draw,
         input={"all_bowtie_summary": [target + "_bowtie_summary.txt" for target in conf.sample_targets],
                "R_template": R_cumulative_template,
@@ -288,9 +296,6 @@ def prepare_macs2_peakcall_on_rep(workflow, conf):
 
         macs2_on_rep.update(param=conf.items("macs2"))
 
-
-
-
         ## For bedGraphToBigwiggle bugs, we need to remove coordinates outlier
         ## filter bdg file to remove over-border coordinates
         bdg_trim_controlrep = attach_back(workflow,
@@ -320,6 +325,7 @@ def prepare_macs2_peakcall_on_rep(workflow, conf):
         bdg2bw_controlrep.output = target + "_treat.bw"
         attach_back(workflow, bdg2bw_controlrep)
 
+    
     attach_back(workflow,
         PythonCommand(
             qc_non_redundant_rate_draw,

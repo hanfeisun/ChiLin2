@@ -1,0 +1,63 @@
+%- if has_reps
+[replicates]
+\BLOCK{ for rep in reps }
+treatment_bam = \VAR{rep.bam}
+macs_peaks = \VAR{rep.peakbed}
+macs_treat_bw = \VAR{rep.bw}
+\BLOCK{ endfor }
+%- endif
+
+%- if section_name == "dataset"
+[dataset]
+dataset_id = \VAR{ names.id }
+username = \VAR{ names.username }
+treat_bam = \VAR{ names.treatbam }
+control_bam = \VAR{ names.controlbam }
+macs_xls = \VAR{ names.peaksxls }
+macs_peaks = \VAR{ names.peaksbed }
+macs_summits = \VAR{ names.ssummitsbed }
+macs_treat_bw = \VAR{ names.treatbw }
+macs_control_bw = \VAR{ names.controlbw }
+ceas_xls = \VAR{ names.ceasxls }
+ceas_pdf = \VAR{ names.ceaspdf }
+ceas_R = \VAR{ names.ceasR }
+venn_diagram_png = \VAR{ names.vennpng }
+dhs_summary_txt = \VAR{ names.dhstxt }
+correlation_pdf = \VAR{ names.corRpdf }
+correlation_R = \VAR{ names.corR }
+conservation_bmp = \VAR{ names.conservpng }
+conservation_R = \VAR{ names.conservR }
+seqpos_zip = \VAR{ names.seqposzip }
+%- endif  
+
+%- if section_name == "peaks_summary"
+[Peaks Quality summary]
+unique location = \VAR{ sam.uniloc }
+
+total_peaks = \VAR{ ratios.totalpeak }
+peaks_overlapped_with_DHSs = \VAR{ ratios.dhs }
+percentage_of_peaks_overlapped_with_DHSs = \VAR{ ratios.dhspercentage }
+
+peaks_fc_ge_20 = \VAR{ ratios.peaksge20 }
+peaks_fc_ge_20_ratio = \VAR{ ratios.peaksge20ratio }
+
+peaks_fc_ge_10 = \VAR{ ratios.peaksge10 }
+peaks_fc_ge_10_ratio = \VAR{ ratios.peaksge20ratio }
+
+d = \VAR{ ratios.distance }
+verlcro overlap peak number is: \VAR{ ratios.velcro }
+verlcro overlap percentage is: \VAR{ ratios.velcropercentage }
+%- endif  
+
+%- if section_name == "bowtie"
+[Bowtie Quality information]
+%- endif
+
+%- if output_sams
+\BLOCK{ for sam in sams }
+sam_file = \VAR{ sam.name }
+total_reads = \VAR{ sam.total }
+unique_reads = \VAR{ sam.unireads }
+usable_percentage(unique/total reads) = \VAR{ sam.percentage }
+\BLOCK{ endfor }
+%- endif

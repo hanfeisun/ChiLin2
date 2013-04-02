@@ -4,6 +4,7 @@ from samflow.command import ThrowableShellCommand
 from chilin2.jinja_template_render import JinjaTemplateCommand, write_and_run_Rscript, write_into
 
 
+
 def underline_to_space(x):
     if type(x) == str:
         return x.replace("_", " ")
