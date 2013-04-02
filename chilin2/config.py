@@ -2,11 +2,15 @@ from configparser import ConfigParser, NoSectionError, NoOptionError
 import os
 class NoTreatmentData(Exception):
     pass
+class NoConfigFile(Exception):
+    pass
 
 class ChiLinConfig(object):
     def __init__(self, conf):
         self._verbose_level = 1
         self._conf = ConfigParser()
+        if not os.path.exists(conf):
+            raise IOError("No such config file: %s" % repr(conf))
         self._conf.read(conf)
         self.root_dir = os.path.dirname(conf)
 
