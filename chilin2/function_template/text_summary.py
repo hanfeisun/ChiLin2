@@ -1,34 +1,38 @@
-import jinja2
 from chilin2.jinja_template_render import JinjaTemplateCommand, write_into
 
-def bowtie_summary(input = {"data_template": ""}, output = {"sum_section": ""},
-                   param = {"bowtie_summary": "", "peaks_xls": "", "sam_files": ""}):
-    """bowtie data summary
-    sams = [{'name1':a, 'total1': 5...}, {'name2':c, 'total2': 3...}...] **args
-    """
-    ## TODO: unique location ?
-    sams = []
-    for i in range(len(param["bowtie_summary"])):
-        ## bowtie summary has same length with macs2 xls
-        # with open(param["peaks_xls"][i]) as macs:
-        #     content = macs.readlines()
-        #     uniloc = int(content[16].strip().split(":")[1])
-        with open(param["bowtie_summary"][i]) as bowtie_sum:
-            content = bowtie_sum.readlines()
-            total = int(content[0].strip().split(":")[1])
-            align = int(content[4].strip().split()[1])
-            usable_percentage = float(align)/total
-        sams.append({"name": input["sam_files"][i],  "total": total,
-                     "unireads": align, "percentage": str(usable_percentage*100) + "%"})
+def text_bowtie_summary(input={"data_template": "", "bowtie_summary": []},
+                        output={"sum_section": ""},
+                        param={"sam_files": []}
+):
+    """ sams = [{'name1':a, 'total1': 5...}, {'name2':c, 'total2': 3...}...] **args """
 
-    print(sams)
+    # unique location is in text_macs2_summary part
+    sams_info = []
+    for a_summary, a_sam in zip(input["bowtie_summary"], param["sam_files"]):
+        summary_lines = open(a_summary).readlines()
+        print("ppyy" + a_summary)
+        print(summary_lines)
+        # first line should be like this: `# reads processed: 1234`
+        total = int(summary_lines[0].strip().split(":")[1])
+
+        # fifth line should be like this: `Reported 1234 alignments to 1 output stream(s)`
+        align = int(summary_lines[4].strip().split()[1])
+
+        usable_percentage = float(align) / total
+
+        sams_info.append({"name": a_sam,
+                          "total": total,
+                          "unireads": align,
+                          "percentage": "%.2f%%" % (usable_percentage * 100)})
+
     bowtie = JinjaTemplateCommand(
-        name = "bowtie summary",
-        template = input["data_template"],
-        param = {"section_name": "bowtie",
-                 "output_sams": True,
-                 "sams": sams})
-    write_into(bowtie ,output["sum_section"])
+        name="bowtie summary",
+        template=input["data_template"],
+        param={"section_name": "bowtie",
+               "output_sams": True,
+               "sams": sams_info})
+
+    write_into(bowtie, output["sum_section"])
 
 # def macs2_summary(input = "", output = "", param = ""):
 #     """
@@ -81,7 +85,7 @@ def bowtie_summary(input = {"data_template": ""}, output = {"sum_section": ""},
 
 # def file_summary(input = "", output ="", param = {"has_reps": True, "files": ""}):
 #     """
-    
+
 #     Arguments:
 #     - `input`:
 #     - `output`:

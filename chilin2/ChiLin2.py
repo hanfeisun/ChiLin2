@@ -4,7 +4,6 @@ import os
 import sys
 import re
 import argparse
-from os.path import basename
 from samflow.command import ShellCommand, PythonCommand
 from samflow.workflow import Workflow, attach_back
 from chilin2.config import ChiLinConfig
@@ -16,12 +15,12 @@ from chilin2.function_template.qc_venn_replicate import qc_replicate_parse, qc_v
 from chilin2.function_template.qc_ceas import qc_redraw_ceas_graph
 from chilin2.function_template.qc_phast_conservation import qc_conservation_draw
 from chilin2.function_template.qc_mdseqpos import qc_mdseqpos_parse_and_filter_by_z_score
-from chilin2.function_template.data_summary import bowtie_summary
+from chilin2.function_template.text_summary import text_bowtie_summary
 
 ChiLinQC_db = resource_filename("chilin2", "db/ChiLinQC.db")
 R_cumulative_template = resource_filename("chilin2", "jinja_template/R_culmulative_plot.R.jinja2")
 Latex_summary_report_template = resource_filename("chilin2", "jinja_template/Latex_summary_report.jinja2")
-data_summary_report_template = resource_filename("chilin2", "jinja_template/data_summary.jinja2")
+text_summary_report_template = resource_filename("chilin2", "jinja_template/text_summary_report.jinja2")
 
 
 class FriendlyArgumentParser(argparse.ArgumentParser):
@@ -50,12 +49,12 @@ def parse_args(args=None):
     parser_run.add_argument("-c", "--config", dest="config", required=True,
         help="specify the config file to use", )
 
-    parser_run.add_argument("--from", dest = "start_step", default = 0, type = int,
-        help = "Only step after this number will be processed")
-    parser_run.add_argument("--to", dest = "end_step", default = 100, type = int,
-        help = "Only step before this number will be processed ")
-    parser_run.add_argument("--skip", dest = "skip_step", default = "",
-        help = "Steps to skip, use comma as seperator")
+    parser_run.add_argument("--from", dest="start_step", default=0, type=int,
+        help="Only step after this number will be processed")
+    parser_run.add_argument("--to", dest="end_step", default=100, type=int,
+        help="Only step before this number will be processed ")
+    parser_run.add_argument("--skip", dest="skip_step", default="",
+        help="Steps to skip, use comma as seperator")
 
     parser_run.add_argument("-v", "--verbose-level", dest="verbose_level", type=int, default=2)
     parser_run.add_argument("--dry-run", dest="dry_run", action="store_true", default=False)
@@ -64,12 +63,13 @@ def parse_args(args=None):
     parser_run.add_argument("--debug", help="debug mode", action="store_true", default=False)
     return parser.parse_args(args)
 
+
 def make_copy_command(orig, dest):
     return ShellCommand(
         "cp {input} {output}",
-        input = orig,
-        output = dest,
-        name = "copy")
+        input=orig,
+        output=dest,
+        name="copy")
 
 
 def prepare_groom_sequencing_files(workflow, conf):
@@ -89,7 +89,7 @@ def prepare_groom_sequencing_files(workflow, conf):
                     name="groom"))
 
         elif re.search(r"\.(fastq|fq)", raw, re.I):
-            attach_back(workflow, make_copy_command(orig = raw, dest= target + ".fastq"))
+            attach_back(workflow, make_copy_command(orig=raw, dest=target + ".fastq"))
         else:
             print(raw, " is neither fastq nor bam file. Skip grooming.")
             not_groomed.append([raw, target])
@@ -121,6 +121,7 @@ def prepare_raw_QC(workflow, conf):
             param={"ids": conf.sample_bases,
                    "id": conf.id}))
 
+
 def prepare_bowtie_map(workflow, conf):
     for target in conf.sample_targets:
         bowtie_map = attach_back(workflow,
@@ -137,15 +138,16 @@ def prepare_bowtie_map(workflow, conf):
                        "genome_index": conf.get_path("lib", "genome_index")}))
 
         bowtie_map.update(param=conf.items("bowtie"))
-    ## bowtie data summary
+        ## bowtie data summary
     ## using bowtie standard error output and macs2 replicates peaks.xls information
-    bowtie_data_summary = attach_back(workflow,
-                                      PythonCommand(bowtie_summary,
-                                               input = {"data_template": data_summary_report_template, "sam_files": [ t + ".sam" for t in conf.sample_targets]},
-                                               output = {"sum_section": conf.prefix + "_all_bowtie_summary"},
-                                               param = {"bowtie_summary": [t + "_bowtie_summary.txt" for t in conf.sample_targets ]}))
-                                                        # "peaks_xls": [ t + "_peaks.xls" for t in conf.treatment_targets ]}))
-    
+    attach_back(workflow,
+        PythonCommand(text_bowtie_summary,
+            input={"data_template": text_summary_report_template,
+                   "bowtie_summary": [t + "_bowtie_summary.txt" for t in conf.sample_targets]},
+            output={"sum_section": conf.prefix + "_all_bowtie_summary"},
+            param={"sam_files": [t + ".sam" for t in conf.sample_targets], }))
+    # "peaks_xls": [ t + "_peaks.xls" for t in conf.treatment_targets ]}))
+
     attach_back(workflow, PythonCommand(qc_bowtie_summary_draw,
         input={"all_bowtie_summary": [target + "_bowtie_summary.txt" for target in conf.sample_targets],
                "R_template": R_cumulative_template,
@@ -192,32 +194,29 @@ def prepare_macs2_peakcall(workflow, conf):
     elif len(conf.control_targets) == 1:
         attach_back(workflow, make_copy_command(conf.control_targets[0] + ".bam", conf.prefix + "_control.bam"))
 
-
-
     macs2_on_merged = attach_back(workflow, ShellCommand(
-            "{tool} callpeak -B -q 0.01 --keep-dup {param[keep_dup]} --shiftsize={param[shiftsize]} --nomodel \
-            {param[treat_opt]} {param[control_opt]} -n {param[description]}",
-            tool="macs2",
-            input={"treat": conf.prefix + "_treatment.bam"},
-            output={"peaks": conf.prefix + "_peaks.bed",
-                    "summit": conf.prefix + "_summits.bed",
-                    "treat_bdg": conf.prefix + "_treat_pileup.bdg",
-                    "ENCODE": conf.prefix + "_peaks.encodePeak",
-                    "peaks_xls": conf.prefix + "_peaks.xls",
-                    "control_bdg": conf.prefix + "_control_lambda.bdg"},
-            param={"description": conf.prefix,
-                   "keep_dup": 1,
-                   "shiftsize": 73},
-            name="macs2_callpeak_merged"))
+        "{tool} callpeak -B -q 0.01 --keep-dup {param[keep_dup]} --shiftsize={param[shiftsize]} --nomodel \
+        {param[treat_opt]} {param[control_opt]} -n {param[description]}",
+        tool="macs2",
+        input={"treat": conf.prefix + "_treatment.bam"},
+        output={"peaks": conf.prefix + "_peaks.bed",
+                "summit": conf.prefix + "_summits.bed",
+                "treat_bdg": conf.prefix + "_treat_pileup.bdg",
+                "ENCODE": conf.prefix + "_peaks.encodePeak",
+                "peaks_xls": conf.prefix + "_peaks.xls",
+                "control_bdg": conf.prefix + "_control_lambda.bdg"},
+        param={"description": conf.prefix,
+               "keep_dup": 1,
+               "shiftsize": 73},
+        name="macs2_callpeak_merged"))
     macs2_on_merged.param["treat_opt"] = "-t " + macs2_on_merged.input["treat"]
 
     # control option is skipped if control samples does not exist
-    if len(conf.control_targets) >=1:
+    if len(conf.control_targets) >= 1:
         macs2_on_merged.input["control"] = conf.prefix + "_control.bam"
         macs2_on_merged.param["control_opt"] = "-c " + macs2_on_merged.input["control"]
     else:
         macs2_on_merged.param["control_opt"] = ""
-
 
     macs2_on_merged.update(param=conf.items("macs2"))
 
@@ -288,7 +287,7 @@ def prepare_macs2_peakcall_on_rep(workflow, conf):
                 name="macs2_callpeak_rep"))
         macs2_on_rep.param["treat_opt"] = "-t " + macs2_on_rep.input["treat"]
         # control option is skipped if control samples does not exist
-        if len(conf.control_targets) >=1:
+        if len(conf.control_targets) >= 1:
             macs2_on_rep.input["control"] = conf.prefix + "_control.bam"
             macs2_on_rep.param["control_opt"] = "-c " + macs2_on_rep.input["control"]
         else:
@@ -325,7 +324,6 @@ def prepare_macs2_peakcall_on_rep(workflow, conf):
         bdg2bw_controlrep.output = target + "_treat.bw"
         attach_back(workflow, bdg2bw_controlrep)
 
-    
     attach_back(workflow,
         PythonCommand(
             qc_non_redundant_rate_draw,
@@ -373,9 +371,9 @@ def prepare_macs2_venn_on_rep(workflow, conf):
     venn_qc = attach_back(workflow,
         PythonCommand(
             qc_venn,
-            input = {"venn": conf.prefix + "_venn.png",
-                     "latex_template": Latex_summary_report_template},
-            output = {"latex_section": conf.prefix + "_venn.tex"}
+            input={"venn": conf.prefix + "_venn.png",
+                   "latex_template": Latex_summary_report_template},
+            output={"latex_section": conf.prefix + "_venn.tex"}
         )
     )
 
@@ -407,7 +405,7 @@ def prepare_macs2_cor_on_rep(workflow, conf):
             input={"correlation_R": conf.prefix + "_cor.R",
                    "latex_template": Latex_summary_report_template,
                    "cor_pdf": conf.prefix + "_cor.pdf"},
-            output={"latex_section":  conf.prefix + "_cor.tex"}))
+            output={"latex_section": conf.prefix + "_cor.tex"}))
 
 
 # def step5_prepare_DHS_overlap_annotation(workflow, conf):
@@ -462,7 +460,6 @@ def prepare_ceas_annotation(workflow, conf):
             name="ceas"))
     ceas.update(param=conf.items("ceas"))
 
-
     attach_back(workflow,
         PythonCommand(
             qc_redraw_ceas_graph,
@@ -473,7 +470,7 @@ def prepare_ceas_annotation(workflow, conf):
                     "peakheight_and_pie_pdf": conf.prefix + "_peakheight_and_pie.pdf",
                     "metagene_dist_pdf": conf.prefix + "_metagene_dist.pdf",
                     "latex_section": conf.prefix + "_ceas_qc.tex",
-                    },))
+            }, ))
 
 
 def prepare_phast_conservation_annotation(workflow, conf):
@@ -493,21 +490,21 @@ def prepare_phast_conservation_annotation(workflow, conf):
             mv tmp.pdf {output[pdf]} && \
             mv tmp.R {output[R]}",
 
-            tool = "conservation_plot.py",
-            input = {"bed" : conf.prefix + "_summits_topconserv.bed",
-                     "phast" : conf.get_path("lib", "phast")},
-            output = {"pdf":conf.prefix + "_conserv_tmp.pdf",
-                      "R":conf.prefix + "_conserv_tmp.R"},
-            param = {"width": 4000},
-            name= "conservation"))
-    conservation.update(param = conf.items('conservation'))
+            tool="conservation_plot.py",
+            input={"bed": conf.prefix + "_summits_topconserv.bed",
+                   "phast": conf.get_path("lib", "phast")},
+            output={"pdf": conf.prefix + "_conserv_tmp.pdf",
+                    "R": conf.prefix + "_conserv_tmp.R"},
+            param={"width": 4000},
+            name="conservation"))
+    conservation.update(param=conf.items('conservation'))
 
     attach_back(workflow,
         ShellCommand(
             "{tool} -resize 500x500 -density 50  {input[pdf]} {output[pdf]} && mv {input[R]} {output[R]}",
             tool="convert", ## width differs histone mark and TF
-            input={"pdf":conf.prefix + "_conserv_tmp.pdf",
-                   "R":conf.prefix + "_conserv_tmp.R"},
+            input={"pdf": conf.prefix + "_conserv_tmp.pdf",
+                   "R": conf.prefix + "_conserv_tmp.R"},
             output={"pdf": conf.prefix + "conserv.pdf", "R": conf.prefix + "conserv.R"},
             name="convert pdf to png", ))
 
@@ -563,32 +560,36 @@ def prepare_mdseqpos_annotation(workflow, conf):
     #         output = {"latex_section": conf.prefix + "_seqpos.tex"},
     #         param = {"z_score_cutoff": -15}))
 
-def cat_latex(input = "", output = "", param = {"latex_combined": ""}):
+
+def cat_latex(input="", output="", param={"latex_combined": ""}):
     with open(output, "w") as f:
         content = ""
         for latex in param["latex_combined"]:
             content += open(latex).read()
         f.write(content)
     f.close()
-    
+
+
 def prepare_report_summary(workflow, conf, latex_combined):
     cat = attach_back(workflow,
-                      PythonCommand(cat_latex,
-                                    output = conf.prefix + "_report.tex"))
+        PythonCommand(cat_latex,
+            output=conf.prefix + "_report.tex"))
     cat.param.update({"latex_combined": latex_combined})
     attach_back(workflow,
         ShellCommand(
             "{tool} {input} && {tool} {input}",
             "pdflatex",
-            input = conf.prefix + "_report.tex",
-            output = conf.prefix + "_report.pdf",
+            input=conf.prefix + "_report.tex",
+            output=conf.prefix + "_report.pdf",
             name="report"))
+
 
 class StepChecker:
     def __init__(self, start, end, skips):
         self.start = start
         self.end = end
         self.skips = skips
+
     def need_run(self, step_id):
         if step_id < self.start:
             return False
@@ -597,6 +598,7 @@ class StepChecker:
         if step_id in self.skips:
             return False
         return True
+
 
 def create_workflow(args, conf, step_checker : StepChecker):
     """
@@ -608,7 +610,7 @@ def create_workflow(args, conf, step_checker : StepChecker):
     attach_back(workflow,
         ShellCommand(
             "if [ ! -d '{output}' ]; then mkdir -p {output}; fi",
-            output = conf.target_dir))
+            output=conf.target_dir))
 
     # Whether there are replicates for treatment group
     have_reps = len(conf.treatment_pairs) >= 2
@@ -622,11 +624,11 @@ def create_workflow(args, conf, step_checker : StepChecker):
 
     if need_run(2):
         prepare_raw_QC(workflow, conf)
-        latex_combined.append(conf.prefix + "_raw_sequence_qc.tex")        
+        latex_combined.append(conf.prefix + "_raw_sequence_qc.tex")
 
     if need_run(3):
         prepare_bowtie_map(workflow, conf)
-        latex_combined.append(conf.prefix + "_mappable.tex")        
+        latex_combined.append(conf.prefix + "_mappable.tex")
 
     if need_run(4):
         prepare_macs2_peakcall(workflow, conf)
@@ -639,11 +641,11 @@ def create_workflow(args, conf, step_checker : StepChecker):
 
         if need_run(6):
             prepare_macs2_venn_on_rep(workflow, conf)
-            latex_combined.append(conf.prefix + "_venn.tex")            
+            latex_combined.append(conf.prefix + "_venn.tex")
 
         if need_run(7):
             prepare_macs2_cor_on_rep(workflow, conf)
-            latex_combined.append(conf.prefix + "_cor.tex")            
+            latex_combined.append(conf.prefix + "_cor.tex")
 
     if need_run(8):
         prepare_ceas_annotation(workflow, conf)
@@ -651,14 +653,15 @@ def create_workflow(args, conf, step_checker : StepChecker):
 
     if need_run(9):
         prepare_phast_conservation_annotation(workflow, conf)
-        latex_combined.append(conf.prefix + "_conserv_qc.tex")        
+        latex_combined.append(conf.prefix + "_conserv_qc.tex")
 
     if need_run(10):
         prepare_mdseqpos_annotation(workflow, conf)
         # latex_combined.append(conf.prefix + "_seqpos.tex")
-        
+
     prepare_report_summary(workflow, conf, latex_combined)
     return workflow
+
 
 def main(args=None):
     args = parse_args(args)
@@ -672,19 +675,15 @@ def main(args=None):
 
     step_checker = StepChecker(args.start_step, args.end_step, skipped_steps)
 
-
     workflow = create_workflow(args, conf, step_checker)
 
     workflow.set_option(
-        verbose_level = args.verbose_level,
-        dry_run_mode = args.dry_run,
-        resume = args.resume,
-        allow_dangling = args.allow_dangling)
+        verbose_level=args.verbose_level,
+        dry_run_mode=args.dry_run,
+        resume=args.resume,
+        allow_dangling=args.allow_dangling)
 
     workflow.invoke()
-
-
-
 
 
 if __name__ == "__main__":
