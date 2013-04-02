@@ -10,8 +10,6 @@ def text_bowtie_summary(input={"data_template": "", "bowtie_summary": []},
     sams_info = []
     for a_summary, a_sam in zip(input["bowtie_summary"], param["sam_files"]):
         summary_lines = open(a_summary).readlines()
-        print("ppyy" + a_summary)
-        print(summary_lines)
         # first line should be like this: `# reads processed: 1234`
         total = int(summary_lines[0].strip().split(":")[1])
 
