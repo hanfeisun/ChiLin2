@@ -159,15 +159,26 @@ def prepare_bowtie_map(workflow, conf):
         param={"ids": conf.sample_bases}))
 
 
-def prepare_macs2_peakcall(workflow, conf):
-    # convert the files from SAM to BAM format
+def _prepare_sam2bam(workflow,conf):
+# convert the files from SAM to BAM format
     for target in conf.sample_targets:
         attach_back(workflow,
             ShellCommand(
-                "{tool} view -bt {input[chrom_len]} {input[sam]} -o {output[bam]}",
+                "{tool} view -bt {input[chrom_len]} {input[sam]} -o {param[tmp_bam]} && \
+                {tool} sort -m {param[max_mem]} {param[tmp_bam]} {param[output_prefix]}",
                 tool="samtools",
                 input={"sam": target + ".sam", "chrom_len": conf.get_path("lib", "chrom_len")},
-                output={"bam": target + ".bam"}))
+                output={"bam": target + ".bam"},
+                param={"tmp_bam": target + ".tmp.bam", "output_prefix": target,
+                       "max_mem": 5000000000 },)) # Use 5G memory as default
+        workflow.update(param=conf.items("sam2bam"))
+
+
+
+
+def prepare_macs2_peakcall(workflow, conf):
+
+    _prepare_sam2bam(workflow, conf)
 
     # merge all treatments into one
     merge_bams_treat = ShellCommand(
