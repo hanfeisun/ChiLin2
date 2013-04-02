@@ -158,6 +158,8 @@ def prepare_bowtie_map(workflow, conf):
                 "latex_section": conf.prefix + "_mappable.tex"},
         param={"ids": conf.sample_bases}))
 
+    _prepare_sam2bam(workflow,conf)
+
 
 def _prepare_sam2bam(workflow,conf):
 # convert the files from SAM to BAM format
@@ -177,8 +179,6 @@ def _prepare_sam2bam(workflow,conf):
 
 
 def prepare_macs2_peakcall(workflow, conf):
-
-    _prepare_sam2bam(workflow, conf)
 
     # merge all treatments into one
     merge_bams_treat = ShellCommand(
@@ -419,29 +419,29 @@ def prepare_macs2_cor_on_rep(workflow, conf):
             output={"latex_section": conf.prefix + "_cor.tex"}))
 
 
-# def step5_prepare_DHS_overlap_annotation(workflow, conf):
+def prepare_DHS_overlap_annotation(workflow, conf):
 
-#    DHS_overlap = attach_back(workflow,
-#        ShellCommand(
-#            "{tool} -wa -u  \
-#            -a {input[macs2_peaks_bed]} -b {input[DHS_peaks_bed]} > {output[DHS_overlap_peaks_bed]}",
-#            tool = "intersectBed",
-#            input = {"bed" : conf.prefix + "_peaks.bed",
-#                     "DHS_peaks_bed" :""},
-#            output = conf.prefix + "_DHSoverlap_peaks_bed",
-#            param = None))
+    DHS_overlap = attach_back(workflow,
+        ShellCommand(
+            "{tool} -wa -u  \
+            -a {input[MACS2_bed]} -b {input[DHS_peaks_bed]} > {output}",
+            tool = "intersectBed",
+            input = {"MACS2_bed" : conf.prefix + "_peaks.bed",
+                     "DHS_peaks_bed" : conf.get("lib", "dhs")},
+            output = conf.prefix + "_DHS_overlap_peaks_bed",
+            param = None))
 
-# def  step5_prepare_velcro_overlap_annotation(workflow, conf):
-#    velcro_overlap = attach_back(workflow,
-#        ShellCommand(
-#            "{tool} -wa -u  \
-#            -a {input[macs2_peaks_bed]} -b {input[velcro_peaks_bed]} > {output[DHS_overlap_peaks_bed]}",
-#            tool = "intersectBed",
-#            input = {"bed" : conf.prefix + "_peaks.bed",
-#                     "DHS_peaks_bed" :""},
-#            output = conf.prefix + "_DHSoverlap_peaks_bed",
-#            param = None))
-#    # DHS_velcro_latex = attach_back("qc_dhs_velcro")
+def prepare_velcro_overlap_annotation(workflow, conf):
+    velcro_overlap = attach_back(workflow,
+        ShellCommand(
+            "{tool} -wa -u  \
+            -a {input[MACS2_bed]} -b {input[velcro_peaks_bed]} > {output}",
+            tool = "intersectBed",
+            input = {"MACS2_bed" : conf.prefix + "_peaks.bed",
+                     "velcro_peaks_bed" : conf.get("lib", "velcro")},
+            output = conf.prefix + "_velcro_overlap_peaks_bed",
+            param = None))
+
 
 def prepare_ceas_annotation(workflow, conf):
     get_top_peaks = attach_back(workflow,
@@ -625,6 +625,8 @@ def create_workflow(args, conf, step_checker : StepChecker):
 
     # Whether there are replicates for treatment group
     have_reps = len(conf.treatment_pairs) >= 2
+    has_dhs = conf.get("lib", "dhs")
+    has_velcro = conf.get("lib", "velcro")
 
     need_run = step_checker.need_run
 
@@ -658,15 +660,23 @@ def create_workflow(args, conf, step_checker : StepChecker):
             prepare_macs2_cor_on_rep(workflow, conf)
             latex_combined.append(conf.prefix + "_cor.tex")
 
-    if need_run(8):
+
+    if has_dhs and need_run(8):
+        prepare_DHS_overlap_annotation(workflow, conf)
+
+    if has_velcro and need_run(9):
+        prepare_velcro_overlap_annotation(workflow, conf)
+
+
+    if need_run(10):
         prepare_ceas_annotation(workflow, conf)
         latex_combined.append(conf.prefix + "_ceas_qc.tex")
 
-    if need_run(9):
+    if need_run(11):
         prepare_phast_conservation_annotation(workflow, conf)
         latex_combined.append(conf.prefix + "_conserv_qc.tex")
 
-    if need_run(10):
+    if need_run(12):
         prepare_mdseqpos_annotation(workflow, conf)
         # latex_combined.append(conf.prefix + "_seqpos.tex")
 
