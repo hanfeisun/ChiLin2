@@ -49,7 +49,9 @@ def python_fastqc_dist_draw(input={"db": "", "fastqc_summary_list": [], "R_templ
     # Col 1: sample ID
     # Col 2: sequence length
     # Col 3: median of sequence quality
-    fastqc_summary = zip(param["ids"], seq_lengths, quality_medians)
+    fastqc_summary = []
+    for i in zip(param["ids"], seq_lengths, quality_medians):
+        fastqc_summary.append(list(i))
 
     qc_db = sqlite3.connect(input["db"]).cursor()
     qc_db.execute("SELECT median_quality FROM fastqc_info")
@@ -68,7 +70,7 @@ def python_fastqc_dist_draw(input={"db": "", "fastqc_summary_list": [], "R_templ
                "need_smooth_curve": True})
 
     write_and_run_Rscript(fastqc_dist_R, output["rfile"])
-
+    print(fastqc_summary)
     sequence_quality_latex = JinjaTemplateCommand(
         name = "sequence quality",
         template=input['latex_template'],

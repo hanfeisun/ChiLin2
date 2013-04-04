@@ -20,7 +20,8 @@ def qc_mdseqpos_parse_and_filter_by_z_score(input = {"latex_template": "", "seqp
     motif_tree_json_content = re.findall(
         r'var mtree = (.*)',
         seqpos_html_content)[0]
-    # encodedjson = json.dumps(motif_tree_json_content)
+
+    motif_tree_json_content = motif_tree_json_content.replace("\'", "\"")
     motif_tree_dict = json.loads(motif_tree_json_content)
     all_motif_list = _extract_traverse_tree(motif_tree_dict)
     satisfied_motif_list = []
@@ -57,3 +58,12 @@ def qc_mdseqpos_parse_and_filter_by_z_score(input = {"latex_template": "", "seqp
     write_into(motif_latex, output["latex_section"])
 
     return satisfied_motif_list
+
+def end_tex(input = "", output = {"latex_section": ""}, param = {}):
+    end_latex = JinjaTemplateCommand(
+        name = "end of latex document",
+        template = input,
+        param = {"section_name": "ending"})
+    
+    write_into(end_latex, output["latex_section"])
+

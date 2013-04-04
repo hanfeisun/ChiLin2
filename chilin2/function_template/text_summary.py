@@ -32,54 +32,68 @@ def text_bowtie_summary(input={"data_template": "", "bowtie_summary": []},
 
     write_into(bowtie, output["sum_section"])
 
-# def macs2_summary(input = "", output = "", param = ""):
-#     """
-#     Arguments:
-#     - `input`:
-#     - `output`:
-#     - `param`:
-#     """
-#     fhd = open(self.rule.macs.peaksxls,"r")
-#     total = 0
-#     fc20n = 0
-#     fc10n = 0
-#     for i in fhd:
-#         i = i.strip()
-#         if i and not i.startswith("#") and not i.startswith("chr\t"):
-#             total += 1
-#             fs = i.split("\t")
-#             fc = fs[7]
-#             if fc >= 20:
-#                 fc20n += 1
-#             if fc >= 10:
-#                 fc10n += 1
-#     self.macsinfo['totalpeak'] = total
-#     self.macsinfo['peaksge20'] = fc20n
-#     self.macsinfo['peaksge10'] = fc10n
-#     if total != 0:
-#         self.macsinfo['peaksge10ratio'] = float(fc10n)/total
-#         self.macsinfo['peaksge20ratio'] = float(fc20n)/total
-#     else:
-#         self.macsinfo['peaksge10ratio'] = 0.0001
-#         self.macsinfo['peaksge20ratio'] = 0.0001
-#     self.macsinfo['distance'] = float(self.shiftsize) * 2
-#     self.rendercontent['ratios'] = self.macsinfo
-#     ## dhs, velcor and all peaks summary
-#     lenall = len(open(self.rule.macs.treatpeaks, 'rU').readlines())
-#     if a_type == 'dhs':
-#         lena_type = len(open(self.rule.bedtools.dhs, 'r').readlines())
-#     elif a_type == 'velcro':
-#         if species:
-#             lena_type = len(open(self.rule.bedtools.velcro, 'r').readlines())
-#     self.ratio[a_type] = lena_type
-#     if lenall != 0:
-#         self.ratio[a_type + 'percentage'] = float(lena_type)/lenall
-#     else:
-#         self.ratio[a_type + 'percentage'] = 0.0001
-
-#     for k, v in self.ratio.iteritems():
-#         self.rendercontent['ratios'][k] = v
-#     return
+def macs2_summary(input = {"data_template": "", "macs2_peaks_xls": "", "dhs_peaks": "", "velcro_peaks": ""},
+                  output = {"sum_section": ""}, param = {"has_dhs": "", "has_velcro": ""}):
+    """ unique location, total peaks, peaks overlap with DHS sites, DHS sites ratio
+    peaks with fold change >= 20(and ratio),
+    peaks with fold change >= 10(and ratio),
+    distance = shiftsize * 2
+    velcro peaks number( and ratio )
+    peaks = {'name1':a, 'total1': 5...} **args
+    """
+    total = 0
+    fc20n = 0
+    fc10n = 0
+    peaks_info = {}
+    with open(input["macs2_peaks_xls"]) as peaks_xls:
+        for line in peaks_xls:
+            if line.startswith('# tags after filtering in treatment'):
+                # tags after filtering in treatment: 13438948
+                peaks_info["uniloc"] = int(line.strip().split(":")[1])
+            if line.startswith('# d'):
+                peaks_info["distance"] = int(line.strip().split("=")[1])
+            if line.strip() != "" and not line.startswith("#") and not line.startswith("chr\t"):
+                l = line.strip().split("\t")
+                total += 1
+                ## column 7th denotes fold change value
+                fc = float(l[7])
+                if fc >= 20:
+                    fc20n += 1
+                if fc >= 10:
+                    fc10n += 1
+                    
+    peaks_info["totalpeak"] = total
+    peaks_info["peaksge20"] = fc20n
+    peaks_info["peaksge10"] = fc10n
+    
+    ## dhs, velcor and all peaks summary
+    if param["has_dhs"]:
+        peaks_info["dhs"] = len(open(input["dhs_peaks"], 'r').readlines())
+    else:
+        peaks_info["dhs"] = "NA"
+        
+    if param["has_velcro"]:
+        peaks_info["velcro"] = len(open(input["velcro_peaks"], 'r').readlines())
+    else:
+        peaks_info["velcro"] = "NA"        
+    
+    if not peaks_info["totalpeak"]:
+        peaks_info['dhspercentage'] = "NA"
+        peaks_info['velcropercentage'] = "NA"
+        peaks_info["peaksge20ratio"] = "NA"
+        peaks_info["peaksge10ratio"] = "NA"        
+    else:
+        peaks_info['dhspercentage'] = peaks_info["dhs"] / peaks_info["totalpeak"]
+        peaks_info['velcropercentage'] = peaks_info["velcro"] / peaks_info["totalpeak"]
+        peaks_info["peaksge20ratio"] = peaks_info["peaksge20"] / peaks_info["totalpeak"]
+        peaks_info["peaksge10ratio"] = peaks_info["peaksge10"] / peaks_info["totalpeak"]
+    
+    macs2_summary = JinjaTemplateCommand(
+        name="peaks summary",
+        template=input["data_template"],
+        param={"section_name": "peaks_summary",
+               "peaks": peaks_info})
+    write_into(macs2_summary, output["sum_section"])
 
 # def file_summary(input = "", output ="", param = {"has_reps": True, "files": ""}):
 #     """

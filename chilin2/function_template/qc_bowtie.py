@@ -60,12 +60,11 @@ def qc_bowtie_summary_draw(input={"all_bowtie_summary": "", "db": "", "R_templat
     # COL 4 mappable rates
     basic_map_table = []
     for idx, a_sample in enumerate(param["ids"]):
-        basic_map_table.append([a_sample,
+        basic_map_table.append([underline_to_space(a_sample),
                         bowtie_summaries["total_reads"][idx],
                         bowtie_summaries["mappable_reads"][idx],
                         bowtie_summaries["mappable_rate"][idx]])
 
-        
     mapping_quality_latex = JinjaTemplateCommand(
         name="mapping quality",
         template=input["latex_template"],
@@ -73,7 +72,6 @@ def qc_bowtie_summary_draw(input={"all_bowtie_summary": "", "db": "", "R_templat
                "basic_map_table": basic_map_table,
                "mappable_ratio_graph": output["pdf"],
                })
-    print(output["latex_section"])
-    
+
     write_into(mapping_quality_latex, output['latex_section'])
     return {}

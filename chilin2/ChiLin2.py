@@ -14,8 +14,8 @@ from chilin2.function_template.qc_macs2 import qc_high_confident_peaks_draw, qc_
 from chilin2.function_template.qc_venn_replicate import qc_replicate_parse, qc_venn
 from chilin2.function_template.qc_ceas import qc_redraw_ceas_graph
 from chilin2.function_template.qc_phast_conservation import qc_conservation_draw
-from chilin2.function_template.qc_mdseqpos import qc_mdseqpos_parse_and_filter_by_z_score
-from chilin2.function_template.text_summary import text_bowtie_summary
+from chilin2.function_template.qc_mdseqpos import qc_mdseqpos_parse_and_filter_by_z_score, end_tex
+from chilin2.function_template.text_summary import text_bowtie_summary, macs2_summary
 
 ChiLinQC_db = resource_filename("chilin2", "db/ChiLinQC.db")
 R_cumulative_template = resource_filename("chilin2", "jinja_template/R_culmulative_plot.R.jinja2")
@@ -139,14 +139,14 @@ def prepare_bowtie_map(workflow, conf):
 
         bowtie_map.update(param=conf.items("bowtie"))
         ## bowtie data summary
-    ## using bowtie standard error output and macs2 replicates peaks.xls information
+        
+    ## using bowtie standard error output 
     attach_back(workflow,
         PythonCommand(text_bowtie_summary,
             input={"data_template": text_summary_report_template,
                    "bowtie_summary": [t + "_bowtie_summary.txt" for t in conf.sample_targets]},
             output={"sum_section": conf.prefix + "_all_bowtie_summary"},
             param={"sam_files": [t + ".sam" for t in conf.sample_targets], }))
-    # "peaks_xls": [ t + "_peaks.xls" for t in conf.treatment_targets ]}))
 
     attach_back(workflow, PythonCommand(qc_bowtie_summary_draw,
         input={"all_bowtie_summary": [target + "_bowtie_summary.txt" for target in conf.sample_targets],
@@ -275,7 +275,7 @@ def prepare_macs2_peakcall(workflow, conf):
         param={"id": os.path.basename(conf.prefix)},
         name="high_confident_peaks"
     ))
-
+    
 
 def prepare_macs2_peakcall_on_rep(workflow, conf):
     # Though macs command already exists, I choose not to use prototype here
@@ -442,6 +442,17 @@ def prepare_velcro_overlap_annotation(workflow, conf):
             output = conf.prefix + "_velcro_overlap_peaks_bed",
             param = None))
 
+def prepare_peaks_data_summary(workflow, conf, has_dhs, has_velcro):
+    # using macs2 merged peaks.xls information for unique location and peaks summary
+    # DHS peaks and Velcro peaks summary
+    attach_back(workflow, PythonCommand(
+            macs2_summary,
+            input = {"data_template": text_summary_report_template,
+                     "macs2_peaks_xls": conf.prefix + "_peaks.xls",
+                     "dhs_peaks": conf.prefix + "_DHS_overlap_peaks_bed", "velcro_peaks": conf.prefix + "_velcro_overlap_peaks_bed"},
+            output = {"sum_section": conf.prefix + "_peaks_summary"},
+            param = {"has_dhs": has_dhs, "has_velcro": has_velcro},
+            name = "MACS2 summary"))
 
 def prepare_ceas_annotation(workflow, conf):
     get_top_peaks = attach_back(workflow,
@@ -563,37 +574,50 @@ def prepare_mdseqpos_annotation(workflow, conf):
             input="results",
             output=conf.prefix + "_seqpos",
             name="mv seqpos"))
-    # attach_back(workflow,
-    #     PythonCommand(
-    #         qc_mdseqpos_parse_and_filter_by_z_score,
-    #         input = {"seqpos": conf.prefix + "_seqpos/" + "mdseqpos_out.html",
-    #                  "latex_template": Latex_summary_report_template},
-    #         output = {"latex_section": conf.prefix + "_seqpos.tex"},
-    #         param = {"z_score_cutoff": -15}))
-
-
-def cat_latex(input="", output="", param={"latex_combined": ""}):
+    
+    attach_back(workflow,
+        PythonCommand(
+            qc_mdseqpos_parse_and_filter_by_z_score,
+            input = {"seqpos": conf.prefix + "_seqpos/" + "mdseqpos_out.html",
+                     "latex_template": Latex_summary_report_template},
+            output = {"latex_section": conf.prefix + "_seqpos.tex"},
+            param = {"z_score_cutoff": -15}))
+    
+def cat_latex(input="", output="", param={"latex": ""}):
     with open(output, "w") as f:
         content = ""
-        for latex in param["latex_combined"]:
-            content += open(latex).read()
+        for c in param["latex"]:
+            content += open(c).read()
         f.write(content)
     f.close()
 
-
-def prepare_report_summary(workflow, conf, latex_combined):
-    cat = attach_back(workflow,
-        PythonCommand(cat_latex,
-            output=conf.prefix + "_report.tex"))
-    cat.param.update({"latex_combined": latex_combined})
-    attach_back(workflow,
-        ShellCommand(
-            "{tool} {input} && {tool} {input}",
-            "pdflatex",
-            input=conf.prefix + "_report.tex",
-            output=conf.prefix + "_report.pdf",
+def cat_summary(input="", output="", param={"text": ""}):
+    with open(output, "w") as f:
+        content = ""
+        for c in param["text"]:
+            content += open(c).read()
+        f.write(content)
+    f.close()
+    
+    
+def prepare_report_summary(workflow, conf, latex_combined, text_combined):
+    cat_text = attach_back(workflow,
+                           PythonCommand(cat_summary,
+                                         output = conf.prefix + "_summary.txt"))
+    cat_text.param.update({"text": text_combined})
+    
+    cat_tex = attach_back(workflow,
+                          PythonCommand(cat_latex,
+                                        output=conf.prefix + "_report.tex"))
+    cat_tex.param.update({"latex": latex_combined})
+    
+    report = attach_back(workflow,
+                         ShellCommand(
+            "{tool} -output-directory {output[dir]} -jobname={output[name]} {input} && {tool} -output-directory {output[dir]} -jobname={output[name]} {input}",
+            tool = "pdflatex",
+            input = conf.prefix + "_report.tex",
+            output={"dir": conf.target_dir, "name": conf.id + "_report"},
             name="report"))
-
 
 class StepChecker:
     def __init__(self, start, end, skips):
@@ -631,7 +655,7 @@ def create_workflow(args, conf, step_checker : StepChecker):
     need_run = step_checker.need_run
 
     latex_combined = []
-
+    text_combined = []
     if need_run(1):
         prepare_groom_sequencing_files(workflow, conf)
 
@@ -642,6 +666,7 @@ def create_workflow(args, conf, step_checker : StepChecker):
     if need_run(3):
         prepare_bowtie_map(workflow, conf)
         latex_combined.append(conf.prefix + "_mappable.tex")
+        text_combined.append(conf.prefix + "_all_bowtie_summary")
 
     if need_run(4):
         prepare_macs2_peakcall(workflow, conf)
@@ -659,15 +684,17 @@ def create_workflow(args, conf, step_checker : StepChecker):
         if need_run(7):
             prepare_macs2_cor_on_rep(workflow, conf)
             latex_combined.append(conf.prefix + "_cor.tex")
-
+            
 
     if has_dhs and need_run(8):
         prepare_DHS_overlap_annotation(workflow, conf)
 
     if has_velcro and need_run(9):
         prepare_velcro_overlap_annotation(workflow, conf)
-
-
+        
+    prepare_peaks_data_summary(workflow, conf, has_dhs, has_velcro)
+    text_combined.append(conf.prefix + "_peaks_summary")
+    
     if need_run(10):
         prepare_ceas_annotation(workflow, conf)
         latex_combined.append(conf.prefix + "_ceas_qc.tex")
@@ -678,9 +705,16 @@ def create_workflow(args, conf, step_checker : StepChecker):
 
     if need_run(12):
         prepare_mdseqpos_annotation(workflow, conf)
-        # latex_combined.append(conf.prefix + "_seqpos.tex")
+        latex_combined.append(conf.prefix + "_seqpos.tex")
 
-    prepare_report_summary(workflow, conf, latex_combined)
+    attach_back(workflow,
+                PythonCommand(end_tex,
+                              input = Latex_summary_report_template,
+                              output = {"latex_section": conf.prefix + "_end.tex"},
+                              param = None))
+    latex_combined.append(conf.prefix + "_end.tex")
+    
+    prepare_report_summary(workflow, conf, latex_combined, text_combined)
     return workflow
 
 
@@ -706,6 +740,5 @@ def main(args=None):
 
     workflow.invoke()
 
-
 if __name__ == "__main__":
-    main()
+    main()                      

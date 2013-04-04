@@ -28,6 +28,7 @@ def _qc_peak_summary_parse(input={"macs2_peaks_xls": ""},
                               param={"id": ""}):
     """Basic statistic of peak calling result."""
     name = 'dataset'+ param["id"]
+    shift_size = 0
     with open(input["macs2_peaks_xls"],"rU") as fhd:
         fold_enrichment_list = []
         for i in fhd:
@@ -38,6 +39,8 @@ def _qc_peak_summary_parse(input={"macs2_peaks_xls": ""},
 
             if i.startswith("#") or i.startswith("chr\t") or not i:
                 continue
+            if i.startswith("# d"): # parse shift-size, # d =
+                shift_size = int(i.strip().split("=")[1])/2
 
             fold_enrichment = float(i.split("\t")[7]) #8th column is fold change
             fold_enrichment_list.append(fold_enrichment)
@@ -47,7 +50,7 @@ def _qc_peak_summary_parse(input={"macs2_peaks_xls": ""},
         total_peak_count = len(fold_enrichment_list)
 
         fold_greater_than_10_peaks_count = len(fold_greater_than_10_peaks)
-    peaks_summary = [name, q_value_cutoff, total_peak_count,fold_greater_than_10_peaks_count]
+    peaks_summary = [name, q_value_cutoff, total_peak_count,fold_greater_than_10_peaks_count, shift_size]
 
 #    latex_summary_table = {"desc":'Peaks number with fold change greater than 10X  ',
 #                         "data": name,
