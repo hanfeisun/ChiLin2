@@ -139,7 +139,7 @@ def prepare_bowtie_map(workflow, conf):
 
         bowtie_map.update(param=conf.items("bowtie"))
         ## bowtie data summary
-        
+
     ## using bowtie standard error output 
     attach_back(workflow,
         PythonCommand(text_bowtie_summary,
@@ -158,10 +158,10 @@ def prepare_bowtie_map(workflow, conf):
                 "latex_section": conf.prefix + "_mappable.tex"},
         param={"ids": conf.sample_bases}))
 
-    _prepare_sam2bam(workflow,conf)
+    _prepare_sam2bam(workflow, conf)
 
 
-def _prepare_sam2bam(workflow,conf):
+def _prepare_sam2bam(workflow, conf):
 # convert the files from SAM to BAM format
     for target in conf.sample_targets:
         attach_back(workflow,
@@ -172,14 +172,11 @@ def _prepare_sam2bam(workflow,conf):
                 input={"sam": target + ".sam", "chrom_len": conf.get_path("lib", "chrom_len")},
                 output={"bam": target + ".bam"},
                 param={"tmp_bam": target + ".tmp.bam", "output_prefix": target,
-                       "max_mem": 5000000000 },)) # Use 5G memory as default
+                       "max_mem": 5000000000}, )) # Use 5G memory as default
         workflow.update(param=conf.items("sam2bam"))
 
 
-
-
 def prepare_macs2_peakcall(workflow, conf):
-
     # merge all treatments into one
     merge_bams_treat = ShellCommand(
         "{tool} merge {output[merged]} {param[bams]}",
@@ -275,7 +272,7 @@ def prepare_macs2_peakcall(workflow, conf):
         param={"id": os.path.basename(conf.prefix)},
         name="high_confident_peaks"
     ))
-    
+
 
 def prepare_macs2_peakcall_on_rep(workflow, conf):
     # Though macs command already exists, I choose not to use prototype here
@@ -420,39 +417,42 @@ def prepare_macs2_cor_on_rep(workflow, conf):
 
 
 def prepare_DHS_overlap_annotation(workflow, conf):
-
     DHS_overlap = attach_back(workflow,
         ShellCommand(
             "{tool} -wa -u  \
             -a {input[MACS2_bed]} -b {input[DHS_peaks_bed]} > {output}",
-            tool = "intersectBed",
-            input = {"MACS2_bed" : conf.prefix + "_peaks.bed",
-                     "DHS_peaks_bed" : conf.get("lib", "dhs")},
-            output = conf.prefix + "_DHS_overlap_peaks_bed",
-            param = None))
+            tool="intersectBed",
+            input={"MACS2_bed": conf.prefix + "_peaks.bed",
+                   "DHS_peaks_bed": conf.get("lib", "dhs")},
+            output=conf.prefix + "_DHS_overlap_peaks_bed",
+            param=None))
+
 
 def prepare_velcro_overlap_annotation(workflow, conf):
     velcro_overlap = attach_back(workflow,
         ShellCommand(
             "{tool} -wa -u  \
             -a {input[MACS2_bed]} -b {input[velcro_peaks_bed]} > {output}",
-            tool = "intersectBed",
-            input = {"MACS2_bed" : conf.prefix + "_peaks.bed",
-                     "velcro_peaks_bed" : conf.get("lib", "velcro")},
-            output = conf.prefix + "_velcro_overlap_peaks_bed",
-            param = None))
+            tool="intersectBed",
+            input={"MACS2_bed": conf.prefix + "_peaks.bed",
+                   "velcro_peaks_bed": conf.get("lib", "velcro")},
+            output=conf.prefix + "_velcro_overlap_peaks_bed",
+            param=None))
+
 
 def prepare_peaks_data_summary(workflow, conf, has_dhs, has_velcro):
     # using macs2 merged peaks.xls information for unique location and peaks summary
     # DHS peaks and Velcro peaks summary
     attach_back(workflow, PythonCommand(
-            macs2_summary,
-            input = {"data_template": text_summary_report_template,
-                     "macs2_peaks_xls": conf.prefix + "_peaks.xls",
-                     "dhs_peaks": conf.prefix + "_DHS_overlap_peaks_bed", "velcro_peaks": conf.prefix + "_velcro_overlap_peaks_bed"},
-            output = {"sum_section": conf.prefix + "_peaks_summary"},
-            param = {"has_dhs": has_dhs, "has_velcro": has_velcro},
-            name = "MACS2 summary"))
+        macs2_summary,
+        input={"data_template": text_summary_report_template,
+               "macs2_peaks_xls": conf.prefix + "_peaks.xls",
+               "dhs_peaks": conf.prefix + "_DHS_overlap_peaks_bed",
+               "velcro_peaks": conf.prefix + "_velcro_overlap_peaks_bed"},
+        output={"sum_section": conf.prefix + "_peaks_summary"},
+        param={"has_dhs": has_dhs, "has_velcro": has_velcro},
+        name="MACS2 summary"))
+
 
 def prepare_ceas_annotation(workflow, conf):
     get_top_peaks = attach_back(workflow,
@@ -574,15 +574,16 @@ def prepare_mdseqpos_annotation(workflow, conf):
             input="results",
             output=conf.prefix + "_seqpos",
             name="mv seqpos"))
-    
+
     attach_back(workflow,
         PythonCommand(
             qc_mdseqpos_parse_and_filter_by_z_score,
-            input = {"seqpos": conf.prefix + "_seqpos/" + "mdseqpos_out.html",
-                     "latex_template": Latex_summary_report_template},
-            output = {"latex_section": conf.prefix + "_seqpos.tex"},
-            param = {"z_score_cutoff": -15}))
-    
+            input={"seqpos": conf.prefix + "_seqpos/" + "mdseqpos_out.html",
+                   "latex_template": Latex_summary_report_template},
+            output={"latex_section": conf.prefix + "_seqpos.tex"},
+            param={"z_score_cutoff": -15}))
+
+
 def cat_latex(input="", output="", param={"latex": ""}):
     with open(output, "w") as f:
         content = ""
@@ -591,6 +592,7 @@ def cat_latex(input="", output="", param={"latex": ""}):
         f.write(content)
     f.close()
 
+
 def cat_summary(input="", output="", param={"text": ""}):
     with open(output, "w") as f:
         content = ""
@@ -598,27 +600,33 @@ def cat_summary(input="", output="", param={"text": ""}):
             content += open(c).read()
         f.write(content)
     f.close()
-    
-    
+
+
 def prepare_report_summary(workflow, conf, latex_combined, text_combined):
     cat_text = attach_back(workflow,
-                           PythonCommand(cat_summary,
-                                         output = conf.prefix + "_summary.txt"))
+        PythonCommand(cat_summary,
+            output=conf.prefix + "_summary.txt"))
     cat_text.param.update({"text": text_combined})
-    
+
     cat_tex = attach_back(workflow,
-                          PythonCommand(cat_latex,
-                                        output=conf.prefix + "_report.tex"))
+        PythonCommand(cat_latex,
+            output=conf.prefix + "_report.tex"))
     cat_tex.param.update({"latex": latex_combined})
-    
+
     report = attach_back(workflow,
-                         ShellCommand(
-            "{tool} -output-directory {output[dir]} -jobname={param[name]} {input} && {tool} -output-directory {output[dir]} -jobname={param[name]} {input}",
-            tool = "pdflatex",
-            input = conf.prefix + "_report.tex",
-            output={"dir": conf.target_dir, "pdf": conf.id + "_report.pdf"},
-            param = {"name": conf.prefix +"_report"},
+        ShellCommand(
+            # Somehow the pdflatex has to be invoked twice..
+            "{tool} -output-directory {output[dir]} -jobname={param[name]} {input} \
+            && {tool} -output-directory {output[dir]} -jobname={param[name]} {input}",
+
+            tool="pdflatex",
+            input=conf.prefix + "_report.tex",
+            # output[pdf] should use "conf.prefix" to have the absolute path
+            output={"dir": conf.target_dir, "pdf": conf.prefix + "_report.pdf"},
+            # param[name] should use "conf.id" to avoid using absolute path
+            param={"name": conf.id + "_report"},
             name="report"))
+
 
 class StepChecker:
     def __init__(self, start, end, skips):
@@ -685,17 +693,16 @@ def create_workflow(args, conf, step_checker : StepChecker):
         if need_run(7):
             prepare_macs2_cor_on_rep(workflow, conf)
             latex_combined.append(conf.prefix + "_cor.tex")
-            
 
     if has_dhs and need_run(8):
         prepare_DHS_overlap_annotation(workflow, conf)
 
     if has_velcro and need_run(9):
         prepare_velcro_overlap_annotation(workflow, conf)
-        
+
     prepare_peaks_data_summary(workflow, conf, has_dhs, has_velcro)
     text_combined.append(conf.prefix + "_peaks_summary")
-    
+
     if need_run(10):
         prepare_ceas_annotation(workflow, conf)
         latex_combined.append(conf.prefix + "_ceas_qc.tex")
@@ -709,12 +716,12 @@ def create_workflow(args, conf, step_checker : StepChecker):
         latex_combined.append(conf.prefix + "_seqpos.tex")
 
     attach_back(workflow,
-                PythonCommand(end_tex,
-                              input = Latex_summary_report_template,
-                              output = {"latex_section": conf.prefix + "_end.tex"},
-                              param = None))
+        PythonCommand(end_tex,
+            input=Latex_summary_report_template,
+            output={"latex_section": conf.prefix + "_end.tex"},
+            param=None))
     latex_combined.append(conf.prefix + "_end.tex")
-    
+
     prepare_report_summary(workflow, conf, latex_combined, text_combined)
     return workflow
 
