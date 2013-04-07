@@ -441,6 +441,7 @@ def prepare_velcro_overlap_annotation(workflow, conf):
 
 
 def prepare_peaks_data_summary(workflow, conf, has_dhs, has_velcro):
+    # TODO: has_dhs and has_velcro is redundant
     # using macs2 merged peaks.xls information for unique location and peaks summary
     # DHS peaks and Velcro peaks summary
     attach_back(workflow, PythonCommand(
@@ -584,25 +585,29 @@ def prepare_mdseqpos_annotation(workflow, conf):
             param={"z_score_cutoff": -15}))
 
 
-def cat_latex(input="", output="", param={"latex": ""}):
-    with open(output, "w") as f:
-        content = ""
-        for c in param["latex"]:
-            content += open(c).read()
-        f.write(content)
-    f.close()
 
 
-def cat_summary(input="", output="", param={"text": ""}):
-    with open(output, "w") as f:
-        content = ""
-        for c in param["text"]:
-            content += open(c).read()
-        f.write(content)
-    f.close()
+
+
+    
 
 
 def prepare_report_summary(workflow, conf, latex_combined, text_combined):
+    
+    # TODO: cat_latex and cat_summary is redundant, use shell's `cat` is easier
+    def cat_latex(input="", output="", param={"latex": ""}):
+        with open(output, "w") as f:
+            content = ""
+            for c in param["latex"]:
+                content += open(c).read()
+            f.write(content)
+    def cat_summary(input="", output="", param={"text": ""}):
+        with open(output, "w") as f:
+            content = ""
+            for c in param["text"]:
+                content += open(c).read()
+            f.write(content)    
+        
     cat_text = attach_back(workflow,
         PythonCommand(cat_summary,
             output=conf.prefix + "_summary.txt"))
@@ -663,36 +668,36 @@ def create_workflow(args, conf, step_checker : StepChecker):
 
     need_run = step_checker.need_run
 
-    latex_combined = []
-    text_combined = []
+    latex_fragments = []
+    text_fragments = []
     if need_run(1):
         prepare_groom_sequencing_files(workflow, conf)
 
     if need_run(2):
         prepare_raw_QC(workflow, conf)
-        latex_combined.append(conf.prefix + "_raw_sequence_qc.tex")
+        latex_fragments.append(conf.prefix + "_raw_sequence_qc.tex")
 
     if need_run(3):
         prepare_bowtie_map(workflow, conf)
-        latex_combined.append(conf.prefix + "_mappable.tex")
-        text_combined.append(conf.prefix + "_all_bowtie_summary")
+        latex_fragments.append(conf.prefix + "_mappable.tex")
+        text_fragments.append(conf.prefix + "_all_bowtie_summary")
 
     if need_run(4):
         prepare_macs2_peakcall(workflow, conf)
-        latex_combined.append(conf.prefix + "_high_confident.tex")
+        latex_fragments.append(conf.prefix + "_high_confident.tex")
 
     if have_reps:
         if need_run(5):
             prepare_macs2_peakcall_on_rep(workflow, conf)
-            latex_combined.append(conf.prefix + "_redundant.tex")
+            latex_fragments.append(conf.prefix + "_redundant.tex")
 
         if need_run(6):
             prepare_macs2_venn_on_rep(workflow, conf)
-            latex_combined.append(conf.prefix + "_venn.tex")
+            latex_fragments.append(conf.prefix + "_venn.tex")
 
         if need_run(7):
             prepare_macs2_cor_on_rep(workflow, conf)
-            latex_combined.append(conf.prefix + "_cor.tex")
+            latex_fragments.append(conf.prefix + "_cor.tex")
 
     if has_dhs and need_run(8):
         prepare_DHS_overlap_annotation(workflow, conf)
@@ -700,29 +705,32 @@ def create_workflow(args, conf, step_checker : StepChecker):
     if has_velcro and need_run(9):
         prepare_velcro_overlap_annotation(workflow, conf)
 
+    # TODO: split `prepare_peaks_data_summary` and add them into  `prepare_DHS_overlap_annotation` and `prepare_velcro_overlap_annotation` separately
     prepare_peaks_data_summary(workflow, conf, has_dhs, has_velcro)
-    text_combined.append(conf.prefix + "_peaks_summary")
+    text_fragments.append(conf.prefix + "_peaks_summary")
 
     if need_run(10):
         prepare_ceas_annotation(workflow, conf)
-        latex_combined.append(conf.prefix + "_ceas_qc.tex")
+        latex_fragments.append(conf.prefix + "_ceas_qc.tex")
 
     if need_run(11):
         prepare_phast_conservation_annotation(workflow, conf)
-        latex_combined.append(conf.prefix + "_conserv_qc.tex")
+        latex_fragments.append(conf.prefix + "_conserv_qc.tex")
 
     if need_run(12):
         prepare_mdseqpos_annotation(workflow, conf)
-        latex_combined.append(conf.prefix + "_seqpos.tex")
+        latex_fragments.append(conf.prefix + "_seqpos.tex")
 
     attach_back(workflow,
         PythonCommand(end_tex,
             input=Latex_summary_report_template,
             output={"latex_section": conf.prefix + "_end.tex"},
             param=None))
-    latex_combined.append(conf.prefix + "_end.tex")
+    latex_fragments.append(conf.prefix + "_end.tex")
 
-    prepare_report_summary(workflow, conf, latex_combined, text_combined)
+    prepare_report_summary(workflow, conf, latex_fragments, text_fragments)
+
+    # TODO: add cleaning step
     return workflow
 
 
