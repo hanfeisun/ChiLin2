@@ -613,10 +613,11 @@ def prepare_report_summary(workflow, conf, latex_combined, text_combined):
     
     report = attach_back(workflow,
                          ShellCommand(
-            "{tool} -output-directory {output[dir]} -jobname={output[name]} {input} && {tool} -output-directory {output[dir]} -jobname={output[name]} {input}",
+            "{tool} -output-directory {output[dir]} -jobname={param[name]} {input} && {tool} -output-directory {output[dir]} -jobname={param[name]} {input}",
             tool = "pdflatex",
             input = conf.prefix + "_report.tex",
-            output={"dir": conf.target_dir, "name": conf.id + "_report"},
+            output={"dir": conf.target_dir, "pdf": conf.id + "_report.pdf"},
+            param = {"name": conf.prefix +"_report"},
             name="report"))
 
 class StepChecker:
