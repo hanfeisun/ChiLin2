@@ -2,8 +2,7 @@ from chilin2.jinja_template_render import JinjaTemplateCommand, write_into
 
 def text_bowtie_summary(input={"data_template": "", "bowtie_summary": []},
                         output={"sum_section": ""},
-                        param={"sam_files": []}
-):
+                        param={"sam_files": []}):
     """ sams = [{'name1':a, 'total1': 5...}, {'name2':c, 'total2': 3...}...] **args """
 
     # unique location is in text_macs2_summary part
@@ -32,20 +31,12 @@ def text_bowtie_summary(input={"data_template": "", "bowtie_summary": []},
 
     write_into(bowtie, output["sum_section"])
 
-def macs2_summary(input = {"data_template": "", "macs2_peaks_xls": "", "dhs_peaks": "", "velcro_peaks": ""},
-                  output = {"sum_section": ""}, param = {"has_dhs": "", "has_velcro": ""}):
-    """ unique location, total peaks, peaks overlap with DHS sites, DHS sites ratio
-    peaks with fold change >= 20(and ratio),
-    peaks with fold change >= 10(and ratio),
-    distance = shiftsize * 2
-    velcro peaks number( and ratio )
-    peaks = {'name1':a, 'total1': 5...} **args
-    """
+def peaks_parse(input):
     total = 0
     fc20n = 0
     fc10n = 0
     peaks_info = {}
-    with open(input["macs2_peaks_xls"]) as peaks_xls:
+    with open(input) as peaks_xls:
         for line in peaks_xls:
             if line.startswith('# tags after filtering in treatment'):
                 # tags after filtering in treatment: 13438948
@@ -61,39 +52,54 @@ def macs2_summary(input = {"data_template": "", "macs2_peaks_xls": "", "dhs_peak
                     fc20n += 1
                 if fc >= 10:
                     fc10n += 1
-                    
     peaks_info["totalpeak"] = total
     peaks_info["peaksge20"] = fc20n
     peaks_info["peaksge10"] = fc10n
-    
-    ## dhs, velcor and all peaks summary
-    if param["has_dhs"]:
-        peaks_info["dhs"] = len(open(input["dhs_peaks"], 'r').readlines())
-    else:
-        peaks_info["dhs"] = "NA"
-        
-    if param["has_velcro"]:
-        peaks_info["velcro"] = len(open(input["velcro_peaks"], 'r').readlines())
-    else:
-        peaks_info["velcro"] = "NA"        
-    
-    if not peaks_info["totalpeak"]:
-        peaks_info['dhspercentage'] = "NA"
-        peaks_info['velcropercentage'] = "NA"
-        peaks_info["peaksge20ratio"] = "NA"
-        peaks_info["peaksge10ratio"] = "NA"        
-    else:
-        peaks_info['dhspercentage'] = peaks_info["dhs"] / peaks_info["totalpeak"]
-        peaks_info['velcropercentage'] = peaks_info["velcro"] / peaks_info["totalpeak"]
-        peaks_info["peaksge20ratio"] = peaks_info["peaksge20"] / peaks_info["totalpeak"]
-        peaks_info["peaksge10ratio"] = peaks_info["peaksge10"] / peaks_info["totalpeak"]
-    
+    peaks_info["peaksge20ratio"] = peaks_info["peaksge20"] / peaks_info["totalpeak"]
+    peaks_info["peaksge10ratio"] = peaks_info["peaksge10"] / peaks_info["totalpeak"]
+    return peaks_info
+
+def macs2_summary(input = {"data_template": "", "macs2_peaks_xls": ""},
+                  output = {"sum_section": ""}, param = {}):
+    """ unique location, total peaks, peaks overlap with DHS sites, DHS sites ratio
+    peaks with fold change >= 20(and ratio),
+    peaks with fold change >= 10(and ratio),
+    distance = shiftsize * 2
+    velcro peaks number( and ratio )
+    peaks = {'name1':a, 'total1': 5...} **args
+    """
+    peaks_info = peaks_parse(input["macs2_peaks_xls"])
+
     macs2_summary = JinjaTemplateCommand(
         name="peaks summary",
         template=input["data_template"],
         param={"section_name": "peaks_summary",
                "peaks": peaks_info})
+
     write_into(macs2_summary, output["sum_section"])
+
+def velcro_summary(input = {"data_template": "", "macs2_peaks_xls": "", "velcro_peaks": ""}, output = {"sum_section": ""}, param={}):
+    peaks_info =  peaks_parse(input["macs2_peaks_xls"])
+    peaks_info["velcro"] = len(open(input["velcro_peaks"], 'r').readlines())
+    peaks_info['velcropercentage'] = peaks_info["velcro"] / peaks_info["totalpeak"]
+
+    velcro = JinjaTemplateCommand(
+        name="velcro summary",
+        template=input["data_template"],
+        param={"section_name": "velcro",
+               "peaks": peaks_info})
+    write_into(velcro, output["sum_section"])
+
+def dhs_summary(input = {"data_template": "", "macs2_peaks_xls": "", "dhs_peaks": ""}, output = {"sum_section": ""}, param={}):
+    peaks_info =  peaks_parse(input["macs2_peaks_xls"])
+    peaks_info["dhs"] = len(open(input["dhs_peaks"], 'r').readlines())
+    peaks_info['dhspercentage'] = peaks_info["dhs"] / peaks_info["totalpeak"]
+    DHS = JinjaTemplateCommand(
+        name="peaks summary",
+        template=input["data_template"],
+        param={"section_name": "dhs",
+               "peaks": peaks_info})
+    write_into(DHS, output["sum_section"])
 
 # def file_summary(input = "", output ="", param = {"has_reps": True, "files": ""}):
 #     """

@@ -15,7 +15,7 @@ from chilin2.function_template.qc_venn_replicate import qc_replicate_parse, qc_v
 from chilin2.function_template.qc_ceas import qc_redraw_ceas_graph
 from chilin2.function_template.qc_phast_conservation import qc_conservation_draw
 from chilin2.function_template.qc_mdseqpos import qc_mdseqpos_parse_and_filter_by_z_score, end_tex
-from chilin2.function_template.text_summary import text_bowtie_summary, macs2_summary
+from chilin2.function_template.text_summary import text_bowtie_summary, macs2_summary, dhs_summary, velcro_summary
 
 ChiLinQC_db = resource_filename("chilin2", "db/ChiLinQC.db")
 R_cumulative_template = resource_filename("chilin2", "jinja_template/R_culmulative_plot.R.jinja2")
@@ -61,6 +61,7 @@ def parse_args(args=None):
     parser_run.add_argument("--allow-dangling", dest="allow_dangling", action="store_true", default=False)
     parser_run.add_argument("--resume", dest="resume", action="store_true", default=False)
     parser_run.add_argument("--debug", help="debug mode", action="store_true", default=False)
+    parser_run.add_argument("--remove", dest="clean", action="store_true", default=False)
     return parser.parse_args(args)
 
 
@@ -440,20 +441,36 @@ def prepare_velcro_overlap_annotation(workflow, conf):
             param=None))
 
 
-def prepare_peaks_data_summary(workflow, conf, has_dhs, has_velcro):
-    # TODO: has_dhs and has_velcro is redundant
+def prepare_peaks_data_summary(workflow, conf):
     # using macs2 merged peaks.xls information for unique location and peaks summary
     # DHS peaks and Velcro peaks summary
     attach_back(workflow, PythonCommand(
         macs2_summary,
         input={"data_template": text_summary_report_template,
-               "macs2_peaks_xls": conf.prefix + "_peaks.xls",
-               "dhs_peaks": conf.prefix + "_DHS_overlap_peaks_bed",
-               "velcro_peaks": conf.prefix + "_velcro_overlap_peaks_bed"},
+               "macs2_peaks_xls": conf.prefix + "_peaks.xls"},
         output={"sum_section": conf.prefix + "_peaks_summary"},
-        param={"has_dhs": has_dhs, "has_velcro": has_velcro},
+        param = None,
         name="MACS2 summary"))
 
+def prepare_peaks_dhs(workflow, conf):
+    attach_back(workflow, PythonCommand(
+        dhs_summary,
+        input = {"data_template": text_summary_report_template, "dhs_peaks": conf.prefix + "_DHS_overlap_peaks_bed",
+                 "macs2_peaks_xls": conf.prefix + "_peaks.xls"},
+        output = {"sum_section": conf.prefix + "_dhs_summary"},
+        param = None,
+        name = "DHS summary"
+    ))
+
+def prepare_peaks_velcro(workflow, conf):
+    attach_back(workflow, PythonCommand(
+        velcro_summary,
+        input = {"data_template": text_summary_report_template,"velcro_peaks": conf.prefix + "_velcro_overlap_peaks_bed",
+                 "macs2_peaks_xls": conf.prefix + "_peaks.xls"},
+        output = {"sum_section": conf.prefix + "_velcro_summary"},
+        param = None,
+        name = "Velcro summary"
+    ))
 
 def prepare_ceas_annotation(workflow, conf):
     get_top_peaks = attach_back(workflow,
@@ -594,29 +611,22 @@ def prepare_mdseqpos_annotation(workflow, conf):
 
 def prepare_report_summary(workflow, conf, latex_combined, text_combined):
     
-    # TODO: cat_latex and cat_summary is redundant, use shell's `cat` is easier
-    def cat_latex(input="", output="", param={"latex": ""}):
-        with open(output, "w") as f:
-            content = ""
-            for c in param["latex"]:
-                content += open(c).read()
-            f.write(content)
-    def cat_summary(input="", output="", param={"text": ""}):
-        with open(output, "w") as f:
-            content = ""
-            for c in param["text"]:
-                content += open(c).read()
-            f.write(content)    
-        
     cat_text = attach_back(workflow,
-        PythonCommand(cat_summary,
-            output=conf.prefix + "_summary.txt"))
-    cat_text.param.update({"text": text_combined})
+        ShellCommand(
+        "{tool} {param[input]} > {output}",
+        tool = "cat",
+        input = text_combined,
+        output=conf.prefix + "_summary.txt",
+        param = {"input": ' '.join(text_combined)},
+        name = "cat text summary"))
 
     cat_tex = attach_back(workflow,
-        PythonCommand(cat_latex,
-            output=conf.prefix + "_report.tex"))
-    cat_tex.param.update({"latex": latex_combined})
+        ShellCommand(
+        "{tool} {param[input]} > {output}",
+        input = latex_combined,
+        output = conf.prefix + "_report.tex",
+        param = {"input": " ".join(latex_combined)},
+        name = "cat latex"))
 
     report = attach_back(workflow,
         ShellCommand(
@@ -685,6 +695,8 @@ def create_workflow(args, conf, step_checker : StepChecker):
     if need_run(4):
         prepare_macs2_peakcall(workflow, conf)
         latex_fragments.append(conf.prefix + "_high_confident.tex")
+        prepare_peaks_data_summary(workflow, conf)
+        text_fragments.append(conf.prefix + "_peaks_summary")
 
     if have_reps:
         if need_run(5):
@@ -701,13 +713,13 @@ def create_workflow(args, conf, step_checker : StepChecker):
 
     if has_dhs and need_run(8):
         prepare_DHS_overlap_annotation(workflow, conf)
+        prepare_peaks_dhs(workflow, conf)
+        text_fragments.append(conf.prefix + "_dhs_summary")
 
     if has_velcro and need_run(9):
         prepare_velcro_overlap_annotation(workflow, conf)
-
-    # TODO: split `prepare_peaks_data_summary` and add them into  `prepare_DHS_overlap_annotation` and `prepare_velcro_overlap_annotation` separately
-    prepare_peaks_data_summary(workflow, conf, has_dhs, has_velcro)
-    text_fragments.append(conf.prefix + "_peaks_summary")
+        prepare_peaks_velcro(workflow, conf)
+        text_fragments.append(conf.prefix + "_velcro_summary")
 
     if need_run(10):
         prepare_ceas_annotation(workflow, conf)
@@ -730,7 +742,9 @@ def create_workflow(args, conf, step_checker : StepChecker):
 
     prepare_report_summary(workflow, conf, latex_fragments, text_fragments)
 
-    # TODO: add cleaning step
+    if args.clean:
+        print("test for clean")
+        #clean_up()
     return workflow
 
 

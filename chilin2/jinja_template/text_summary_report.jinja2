@@ -34,8 +34,6 @@ seqpos_zip = \VAR{ names.seqposzip }
 [Peaks Quality summary]
 unique location = \VAR{ peaks.uniloc }
 total_peaks = \VAR{ peaks.totalpeak }
-peaks_overlapped_with_DHSs = \VAR{ peaks.dhs }
-percentage_of_peaks_overlapped_with_DHSs = \VAR{ peaks.dhspercentage }
 
 peaks_fc_ge_20 = \VAR{ peaks.peaksge20 }
 peaks_fc_ge_20_ratio = \VAR{ peaks.peaksge20ratio }
@@ -44,6 +42,16 @@ peaks_fc_ge_10 = \VAR{ peaks.peaksge10 }
 peaks_fc_ge_10_ratio = \VAR{ peaks.peaksge20ratio }
 
 d = \VAR{ peaks.distance }
+%- endif
+
+%- if section_name == "dhs"
+[DHS]
+peaks_overlapped_with_DHSs = \VAR{ peaks.dhs }
+percentage_of_peaks_overlapped_with_DHSs = \VAR{ peaks.dhspercentage }
+%- endif
+
+%- if section_name == "velcro"
+[Velcro]
 verlcro overlap peak number is: \VAR{ peaks.velcro }
 verlcro overlap percentage is: \VAR{ peaks.velcropercentage }
 %- endif
@@ -51,7 +59,6 @@ verlcro overlap percentage is: \VAR{ peaks.velcropercentage }
 %- if section_name == "bowtie"
 [Bowtie Quality information]
 %- endif
-
 %- if output_sams
 \BLOCK{ for sam in sams }
 sam_file = \VAR{ sam.name }
