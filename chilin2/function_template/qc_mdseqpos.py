@@ -3,13 +3,16 @@ import json
 from chilin2.jinja_template_render import JinjaTemplateCommand, write_into
 
 def _extract_traverse_tree(tree):
-    if tree.get("node", None):
+
+
+    if not tree.get("node", None):
         return []
 
     result_list = [tree['node']]
 
     for a_child in tree['children']:
         result_list.extend(_extract_traverse_tree(a_child))
+
     return result_list
 
 # TODO: parse ?
@@ -17,13 +20,15 @@ def qc_mdseqpos_parse_and_filter_by_z_score(input = {"latex_template": "", "seqp
     """parrase mdsepose html file"""
     z_score_cutoff = param["z_score_cutoff"]
     seqpos_html_content = open(input['seqpos']).read()
-    motif_tree_json_content = re.findall(
+    js_string = re.findall(
         r'var mtree = (.*)',
         seqpos_html_content)[0]
 
-    motif_tree_json_content = motif_tree_json_content.replace("\'", "\"")
-    motif_tree_dict = json.loads(motif_tree_json_content)
-    all_motif_list = _extract_traverse_tree(motif_tree_dict)
+    # TODO(hanfei) : check the issue that mdseqpos table is empty
+    js_string = js_string.replace("\'", "\"")
+    mdseqpos_result = json.loads(js_string)
+
+    all_motif_list = _extract_traverse_tree(mdseqpos_result)
     satisfied_motif_list = []
     satisfied_count = 0
 
@@ -33,6 +38,7 @@ def qc_mdseqpos_parse_and_filter_by_z_score(input = {"latex_template": "", "seqp
         if a_motif['factors'] == []:
             a_motif['factors'] = ['denovo']
     all_motif_list.sort(key=lambda x:x['zscore'])
+
 
     for a_motif in all_motif_list:
 
@@ -48,7 +54,7 @@ def qc_mdseqpos_parse_and_filter_by_z_score(input = {"latex_template": "", "seqp
 
     if satisfied_count < 5:
         satisfied_motif_list = all_motif_list[:5]
-    
+
     motif_latex = JinjaTemplateCommand(
         name = "motif finding",
         template = input["latex_template"],
