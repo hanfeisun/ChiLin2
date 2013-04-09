@@ -642,37 +642,38 @@ def prepare_Tex_ending(workflow, conf):
 
 
 def prepare_report_summary(workflow, conf, latex_combined, text_combined):
-    cat_text = attach_back(workflow,
-        ShellCommand(
-            "{tool} {param[input]} > {output}",
-            tool="cat",
-            input=text_combined,
-            output=conf.prefix + "_summary.txt",
-            param={"input": ' '.join(text_combined)},
-            name="cat text summary"))
+    if text_combined:
+        attach_back(workflow,
+            ShellCommand(
+                "{tool} {param[input]} > {output}",
+                tool="cat",
+                input=text_combined,
+                output=conf.prefix + "_summary.txt",
+                param={"input": ' '.join(text_combined)},
+                name="cat text summary"))
+    if latex_combined:
+        attach_back(workflow,
+            ShellCommand(
+                "{tool} {param[input]} > {output}",
+                input=latex_combined,
+                output=conf.prefix + "_report.tex",
+                param={"input": " ".join(latex_combined)},
+                tool="cat",
+                name="cat latex"))
 
-    cat_tex = attach_back(workflow,
-        ShellCommand(
-            "{tool} {param[input]} > {output}",
-            input=latex_combined,
-            output=conf.prefix + "_report.tex",
-            param={"input": " ".join(latex_combined)},
-            tool="cat",
-            name="cat latex"))
+        attach_back(workflow,
+            ShellCommand(
+                # Somehow the pdflatex has to be invoked twice..
+                "{tool} -output-directory {output[dir]} -jobname={param[name]} {input} \
+                && {tool} -output-directory {output[dir]} -jobname={param[name]} {input}",
 
-    report = attach_back(workflow,
-        ShellCommand(
-            # Somehow the pdflatex has to be invoked twice..
-            "{tool} -output-directory {output[dir]} -jobname={param[name]} {input} \
-            && {tool} -output-directory {output[dir]} -jobname={param[name]} {input}",
-
-            tool="pdflatex",
-            input=conf.prefix + "_report.tex",
-            # output[pdf] should use "conf.prefix" to have the absolute path
-            output={"dir": conf.target_dir, "pdf": conf.prefix + "_report.pdf"},
-            # param[name] should use "conf.id" to avoid using absolute path
-            param={"name": conf.id + "_report"},
-            name="report"))
+                tool="pdflatex",
+                input=conf.prefix + "_report.tex",
+                # output[pdf] should use "conf.prefix" to have the absolute path
+                output={"dir": conf.target_dir, "pdf": conf.prefix + "_report.pdf"},
+                # param[name] should use "conf.id" to avoid using absolute path
+                param={"name": conf.id + "_report"},
+                name="report"))
 
 
 class StepChecker:
@@ -787,10 +788,10 @@ def create_workflow(args, conf, step_checker : StepChecker):
         bld.build(prepare_mdseqpos)
         bld.build_LaTex(prepare_mdseqpos_Tex)
 
-    bld.build_LaTex(prepare_Tex_ending)
-
-    bld.build_summary(prepare_report_summary)
-
+    if need_run(13):
+        if bld.LaTex_fragments:
+            bld.build_LaTex(prepare_Tex_ending)
+            bld.build_summary(prepare_report_summary)
 
     if args.clean:
         print("test for clean")
