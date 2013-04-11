@@ -76,7 +76,6 @@ def python_fastqc_dist_draw(input={"db": "", "fastqc_summary_list": [], "R_templ
         template=input['latex_template'],
         param={"section_name": "sequence_quality",
                "path": output["pdf"],
-               "qc_report_begin": True,
                "fastqc_table": fastqc_summary,
                "fastqc_graph": output["pdf"],
                'prefix_dataset_id': param['id']})

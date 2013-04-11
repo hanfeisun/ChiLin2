@@ -67,3 +67,9 @@ unique_reads = \VAR{ sam.unireads }
 usable_percentage(unique/total reads) = \VAR{ sam.percentage }
 \BLOCK{ endfor }
 %- endif
+
+%- if section_name == "summary"
+[Data Summary]
+library_contamination_ratio =
+unique_mappable_ratio =
+%- endif

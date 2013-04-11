@@ -42,12 +42,31 @@ QC item & Sample or Dataset & Score & Cutoff & Pass or Fail \\
 \end{table}
 \newpage
 %- endif
- 
-         
 
+
+
+%# ----- library contamination ----
+%- if section_name == "library_contamination"
+\subsection{Library contamination}
+\begin{quotation}
+Because the quantity of immunoprecipitated DNA is typically very small it is critically important that the researcher make every effort to avoid contamination of the sample. Contaminate sources can contribute significantly to the final amplified ChIP-Seq library. In some extreme cases, samples may even be mislabeled during preparation.
+To narrow this gap, sample contamination QC were conducted, which would report the sample mappability of human, mouse and rat respectively. By looking back to the mappable ratio listed in the table, researchers would get more clues about library quality.(Table ~\ref{libcontamin})
+\end{quotation}
+\begin{table}[h]
+\caption{Library contamination}\label{libcontamin}
+\begin{tabularx}{\textwidth}{ |X|X|X|X| }
+\hline
+sample name & Human & Mouse & Rat \\
+\hline
+\BLOCK{ for line in library_contamination }
+\VAR{line|join(' & ')} \\
+\BLOCK{ endfor }
+\end{tabularx}
+\end{table}
+\newpage
+%- endif
 
 %# -------------fastqc--------------fastqc_check : fastqc_table ; fastqc_graph
-
 %- if section_name == "sequence_quality"
 
 \section{Reads Genomic Mapping QC measurement}
@@ -60,6 +79,7 @@ Modern high throughput sequencers can generate tens of millions of sequences in 
 FastQC aims to provide a QC report which can spot problems which originate in the sequencer. 
 The sequence quality score listed in the table allows you to see if a subset of your sequences have universally low quality values. Here we can report the sequence quality scores of the new datasets and use our criteria to judge the quality of the new raw data.Sequence quality score of each sample means that more than 50% reads' sequence quality upper than the number. The higher the raw data is better. Here we set 25 as a cutoff based on our collected datasets.(Table ~\ref{fastqctable}).\\
 \end{quotation}
+
 \begin{table}[h]
 \caption{FastQC measurement}\label{fastqctable}
 \begin{tabularx}{\textwidth}{ |X|c|c| } 
