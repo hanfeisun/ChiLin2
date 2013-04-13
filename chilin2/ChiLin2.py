@@ -15,11 +15,12 @@ from pkg_resources import resource_filename
 from chilin2.config import ChiLinConfig
 from chilin2.function_template.qc_bowtie import stat_bowtie, latex_bowtie
 from chilin2.function_template.qc_ceas import stat_ceas, latex_ceas
-from chilin2.function_template.qc_fastqc_raw_sequence import stat_fastqc, latex_fastqc
+from chilin2.function_template.qc_contamination import write_random_records, library_summary
+from chilin2.function_template.qc_fastqc import stat_fastqc, latex_fastqc
 from chilin2.function_template.qc_macs2 import stat_macs2, stat_velcro, stat_dhs, stat_macs2_on_sample, latex_macs2, latex_macs2_on_sample
 from chilin2.function_template.qc_mdseqpos import stat_seqpos, latex_seqpos
-from chilin2.function_template.qc_phast_conservation import stat_conservation, latex_conservation
-from chilin2.function_template.qc_venn_replicate import stat_venn, stat_cor, latex_venn, latex_cor
+from chilin2.function_template.qc_conservation import stat_conservation, latex_conservation
+from chilin2.function_template.qc_venn import stat_venn, stat_cor, latex_venn, latex_cor
 from chilin2.helpers import latex_end
 
 
@@ -136,7 +137,7 @@ def prepare_library_contaminationTex(workflow, conf):
         all_contaminate_files.append([ target + species + "_subset_bowtie_summary.txt" for species in dict(conf.items("contaminate_genomes")) ])
     Tex_step = attach_back(workflow,
         PythonCommand(library_summary,
-             input = {"latex_template": Latex_summary_report_template},
+             input = {"latex_template": latex_template},
              output = {"latex_section": conf.prefix + "_library_contamination_summary"},
              param = {"samples": conf.sample_bases,
                       "bowtie_summary": all_contaminate_files,
@@ -795,7 +796,6 @@ def create_workflow(args, conf, step_checker : StepChecker):
         bld.build(prepare_library_contamination)
         bld.build_LaTex(prepare_library_contaminationTex)
 
-        bld.build(prepare_raw_QC)
     if need_run(3):
         bld.build(_bowtie)
         bld.build(_bowtie_latex)

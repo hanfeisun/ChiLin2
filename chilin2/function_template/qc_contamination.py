@@ -1,7 +1,7 @@
 import random
 import sys
 from chilin2.function_template.qc_bowtie import _qc_bowtie_summary_parse, underline_to_space
-from chilin2.jinja_template_render import JinjaTemplateCommand, write_into
+from chilin2.helpers import JinjaTemplateCommand, template_dump
 
 __author__ = 'qinqianhappy'
 
@@ -40,7 +40,7 @@ def library_summary(input = {"latex_template": ""},
         ## each bowtie_summary has several species information
         bowtie_summaries = []
 
-        print("aaaa", a_summary)
+
         for i in a_summary:
             print(i)
             ## species 1, species2, species3
@@ -55,5 +55,7 @@ def library_summary(input = {"latex_template": ""},
         param={"section_name": "library_contamination",
                "qc_report_begin": True,
                "library_contamination": library_contamination,
-               'prefix_dataset_id': param['id']})
-    write_into(library_quality_latex, output['latex_section'])
+               'prefix_dataset_id': param['id'],
+               "render_dump": output["latex_section"]
+               })
+    template_dump(library_quality_latex)
