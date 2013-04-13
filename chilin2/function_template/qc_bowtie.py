@@ -41,6 +41,8 @@ def stat_bowtie(input={"bowtie_summaries": [], "db":"", "template": ""},
 
     for summary, sam in zip(input["bowtie_summaries"], param["sams"]):
         json_dict["stat"][sam] = _bowtie_summary_parse(summary)
+        json_dict["stat"][sam]["cutoff"] = 5000000 # mappable reads
+        json_dict["stat"][sam]["judge"] = "Pass" if json_dict["stat"][sam]["mappable_reads"] >= 5000000 else "Fail"
 
     mappable_rates = [json_dict["stat"][i]["mappable_rate"] for i in json_dict["stat"]]
 

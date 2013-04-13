@@ -47,6 +47,8 @@ def stat_fastqc(input={"db": "", "fastqc_summaries": [], "template": ""},
 
         stat[a_id] = {}
         stat[a_id]["median"] = parsed["median"]
+        stat[a_id]["cutoff"] = 25
+        stat[a_id]['judge'] = "Pass" if parsed["median"] > 25 else "Fail"
         stat[a_id]["sequence_length"] = parsed["sequence_length"]
 
         quality_medians.append(parsed["median"])

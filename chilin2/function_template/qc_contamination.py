@@ -57,8 +57,6 @@ def stat_contamination(input = {"bowtie_summaries": [[]]},
         json.dump(json_dict, f, indent=4)
 
 
-
-
 def latex_contamination(input, output, param):
 
     json_dict = json_load(input["json"])

@@ -14,7 +14,7 @@ def _peaks_parse(input):
         for line in peaks_xls:
             if line.startswith('# tags after filtering in treatment'):
                 # tags after filtering in treatment: 13438948
-                peaks_info["uniloc"] = int(line.strip().split(":")[1])
+                uniloc = int(line.strip().split(":")[1])
             if line.startswith('# d'):
                 peaks_info["distance"] = int(line.strip().split("=")[1])
             if line.strip() != "" and not line.startswith("#") and not line.startswith("chr\t"):
@@ -30,7 +30,7 @@ def _peaks_parse(input):
                 q_value_cutoff = float(line.split('=')[1])
             if line.startswith("# d"): # parse shift-size, # d =
                 shift_size = int(line.strip().split("=")[1])/2
-
+    peaks_info["uniloc"] = uniloc
     peaks_info["totalpeak"] = total
     peaks_info["peaksge20"] = fc20n
     peaks_info["peaksge10"] = fc10n
@@ -47,6 +47,9 @@ def stat_macs2(input={"macs2_peaks_xls": "", "db": "", "template": ""},
                param={"id": ""}):
     json_dict = {"stat": {}, "input": input, "output": output, "param": param}
     json_dict["stat"] = _peaks_parse(input["macs2_peaks_xls"])
+    json_dict["stat"]["cutoff"] = {"uni_loc": 5000000, "high_conf_peaks": 1000}
+    json_dict["stat"]["judge"] = {"uni_loc": "Pass" if  json_dict["stat"]["uniloc"] > 5000000 else "Fail",
+                                  "high_conf_peaks": "Pass" if json_dict["stat"]["peaksge10"] >= 1000 else "Fail"}
 
     name = [param["id"]]
     db = sqlite3.connect(input["db"]).cursor()
@@ -117,6 +120,8 @@ def stat_macs2_on_sample(input={"all_peak_xls": [], "db": "", "template": "", "t
 
     for id, non_redundant_rate in zip(param["ids"], non_redundant_rates):
         json_dict["stat"][id] = {"non_redundant_rate": non_redundant_rate}
+        json_dict["stat"][id]["cutoff"] = 0.8 # non redundant rate cutoff
+        json_dict["stat"][id]["judge"] = "Pass" if  non_redundant_rate >= 0.8 else "Fail"
 
     db = sqlite3.connect(input["db"]).cursor()
 
@@ -165,6 +170,8 @@ def stat_velcro(input={"macs2_peaks_xls": "", "velcro_peaks": ""}, output={"json
 
     result_dict = {"stat": {}, "input": input, "output": output, "param": param}
     result_dict["stat"] = peaks_info
+    result_dict["stat"]["cutoff"] = 0.9
+    result_dict['stat']["judge"] = "Pass" if (1 - peaks_info['velcropercentage']) >= 0.9 else "Fail"
     with open(output["json"], "w") as f:
         json.dump(result_dict, f, indent=4)
 
@@ -177,6 +184,8 @@ def stat_dhs(input={"macs2_peaks_xls": "", "dhs_peaks": ""}, output={"json": ""}
 
     result_dict = {"stat": {}, "input": input, "output": output, "param": param}
     result_dict["stat"] = peaks_info
+    result_dict["stat"]["cutoff"] = 0.8
+    result_dict["stat"]["judge"] = "Pass" if result_dict["stat"]["dhspercentage"] >= 0.8 else "Fail"
     with open(output["json"], "w") as f:
         json.dump(result_dict, f, indent=4)
 

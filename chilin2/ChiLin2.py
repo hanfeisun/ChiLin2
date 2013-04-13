@@ -21,7 +21,7 @@ from chilin2.function_template.qc_macs2 import stat_macs2, stat_velcro, stat_dhs
 from chilin2.function_template.qc_mdseqpos import stat_seqpos, latex_seqpos
 from chilin2.function_template.qc_conservation import stat_conservation, latex_conservation
 from chilin2.function_template.qc_venn import stat_venn, stat_cor, latex_venn, latex_cor
-from chilin2.helpers import latex_end
+from chilin2.helpers import latex_end, json_load
 
 
 ChiLinQC_db = resource_filename("chilin2", "db/ChiLinQC.db")
@@ -707,6 +707,38 @@ def _ending_latex(workflow, conf):
             latex_end,
             input={"template": latex_template},
             output={"latex": conf.latex_prefix + "_ending.latex"}))
+
+def latex_summary(workflow, conf):
+    """summary of all criteria by plain text"""
+    summary_table = []
+    if os.path.exists(conf.json_prefix + "_contam.json"):
+        contamin = json_load(conf.json_prefix + "_contam.json")['stat']
+    if os.path.exists(conf.json_prefix + "_fastqc.json"):
+        fastqc = json_load(conf.json_prefix + "_fastqc.json")['stat']
+    if os.path.exists(conf.json_prefix + "_bowtie.json"):
+        bowtie = json_load(conf.json_prefix + "_bowtie.json")['stat']
+
+    if os.path.exists(conf.json_prefix + "_macs2_on_sample.json"):
+        macs2_sample = json_load(conf.json_prefix + "_macs2_on_sample.json")['stat']
+    if os.path.exists(conf.json_prefix + "_macs2.json"):
+        macs2 = json_load(conf.json_prefix + "_macs2.json")['stat']
+
+    if os.path.exists(conf.json_prefix + "_venn.json"):
+        venn = json_load(conf.json_prefix + "_venn.json")['stat']
+    if os.path.exists(conf.json_prefix + "_dhs.json"):
+        dhs = json_load(conf.json_prefix + "_dhs.json")['stat']
+    if os.path.exists(conf.json_prefix + "_cor.json"):
+        cor = json_load(conf.json_prefix + "_cor.json")['stat']
+    if os.path.exists(conf.json_prefix + "_velcro.json"):
+        velcro = json_load(conf.json_prefix + "_velcro.json")['stat']
+
+    if os.path.exists(conf.json_prefix + "_ceas.json"):
+        ceas = json_load(conf.json_prefix + "_ceas.json")['stat']
+    if os.path.exists(conf.json_prefix + "_seqpos.json"):
+        seqpos = json_load(conf.json_prefix + "_seqpos.json")['stat']
+    if os.path.exists(conf.json_prefix + "_conserv.json"):
+        conserv = json_load(conf.json_prefix + "_conserv.json")['stat']
+    return
 
 def prepare_clean_up(workflow, conf):
     """
