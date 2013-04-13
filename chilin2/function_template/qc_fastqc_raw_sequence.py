@@ -1,7 +1,7 @@
+import json
 import re
 import sqlite3
-from samflow.command import ThrowableShellCommand
-from chilin2.jinja_template_render import JinjaTemplateCommand, write_and_run_Rscript, write_into
+from chilin2.helpers import JinjaTemplateCommand, template_dump, r_exec, json_dump, json_load
 
 def _python_fastqc_parse(input, output=None, param=None):
     data = open(input).readlines()
@@ -34,31 +34,34 @@ def _python_fastqc_parse(input, output=None, param=None):
             "median": median}
 
 
-def python_fastqc_dist_draw(input={"db": "", "fastqc_summary_list": [], "R_template": "", "latex_template": ""},
-                            output={"rfile": "", "latex_section": "", "pdf": ""},
-                            param={"ids": [], "id": ""}):
-    seq_lengths = []
+def stat_fastqc(input={"db": "", "fastqc_summaries": [], "template": ""},
+                output={"R": "", "json": "", "pdf": ""},
+                param={"ids": [], "id": ""}):
+    json_dict = {"stat": {}, "input": input, "output": output, "param": param}
+    stat = json_dict["stat"]
+
     quality_medians = []
 
+    for a_summary, a_id in zip(input["fastqc_summaries"], param["ids"]):
+        parsed = _python_fastqc_parse(input=a_summary)
 
-    for a_summary in input["fastqc_summary_list"]:
-        parsed_result = _python_fastqc_parse(input=a_summary)
-        quality_medians.append(parsed_result["median"])
+        stat[a_id] = {}
+        stat[a_id]["median"] = parsed["median"]
+        stat[a_id]["sequence_length"] = parsed["sequence_length"]
+
+        quality_medians.append(parsed["median"])
 
     # The table of fastqc_summary that will be used for rendering
     # Col 1: sample ID
     # Col 2: sequence length
     # Col 3: median of sequence quality
-    fastqc_summary = []
-    for i in zip(param["ids"], seq_lengths, quality_medians):
-        fastqc_summary.append(list(i))
 
     qc_db = sqlite3.connect(input["db"]).cursor()
     qc_db.execute("SELECT median_quality FROM fastqc_info")
     history_data = [float(i[0]) for i in qc_db.fetchall()]
 
-    fastqc_dist_R = JinjaTemplateCommand(
-        template=input["R_template"],
+    fastqc_dist_r = JinjaTemplateCommand(
+        template=input["template"],
         param={'historic_data': history_data,
                'current_data': quality_medians,
                'ids': param["ids"],
@@ -66,22 +69,34 @@ def python_fastqc_dist_draw(input={"db": "", "fastqc_summary_list": [], "R_templ
                'main': 'Sequence Quality Score Cumulative Percentage',
                'xlab': 'sequence quality score',
                'ylab': 'fn(sequence quality score)',
-               "pdf": output["pdf"],
-               "need_smooth_curve": True})
+               "need_smooth_curve": True,
 
-    write_and_run_Rscript(fastqc_dist_R, output["rfile"])
-    print(fastqc_summary)
-    sequence_quality_latex = JinjaTemplateCommand(
-        name = "sequence quality",
-        template=input['latex_template'],
+               "pdf": output["pdf"],
+               "render_dump": output["R"]})
+
+    template_dump(fastqc_dist_r)
+    r_exec(fastqc_dist_r)
+
+    json_dump(json_dict)
+
+
+
+def latex_fastqc(input, output, param):
+    json_dict = json_load(input["json"])
+
+    fastqc_summary = []
+    stat = json_dict["stat"]
+    for sample in stat:
+        fastqc_summary.append([sample, stat[sample]["sequence_length"], stat[sample]["median"]])
+
+    latex = JinjaTemplateCommand(
+        template=input["template"],
         param={"section_name": "sequence_quality",
-               "path": output["pdf"],
+               "path": json_dict["output"]["pdf"],
                "qc_report_begin": True,
                "fastqc_table": fastqc_summary,
-               "fastqc_graph": output["pdf"],
-               'prefix_dataset_id': param['id']})
-    write_into(sequence_quality_latex, output["latex_section"])
+               "fastqc_graph": json_dict["output"]["pdf"],
+               'prefix_dataset_id': stat.keys(),
 
-    return {}
-
-
+               "render_dump": output["latex"]})
+    template_dump(latex)

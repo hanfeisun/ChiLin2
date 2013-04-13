@@ -1,5 +1,5 @@
 #def velcro_ratio_info(input={"db": ""},
-#                        output={"rfile": "", "pdf": ""},
+#                        output={"R": "", "pdf": ""},
 #                        param = {"velcro_ratio": [], "ids": [],"latex_SummaryTable":""},
 #                        **args):
 #    """verlcro ratio is used to describe whether the peak is credible , The lower the result is more convenience.
@@ -26,9 +26,9 @@
 #    velcroRatioR = JinjaCommand(name="velcroRatioQC", template="Rtemplate.tex", Rrender)
 #    if velcroRatioR.invoke():
 #        content = velcroRatioR.result().replace('%','\\%')
-#    with open(output["rfile"], 'w') as f:
+#    with open(output["R"], 'w') as f:
 #        f.write(content)
-#    os.system('Rscript %s' % output["rfile"])
+#    os.system('Rscript %s' % output["R"])
 #    latex_summary_table = {"desc":'Overlap with non-velcro ',
 #                         "data":name,
 #                         "value":velcro_ratio,
@@ -39,7 +39,7 @@
 #    return {'verlcro_check':True,'velcro_ratio_graph':output['pdf']}
 #
 #def DHS_ratio_info(self,input={"db": ""},
-#                        output={"rfile": "", "pdf": "","latex_SummaryTable":""},
+#                        output={"R": "", "pdf": "","latex_SummaryTable":""},
 #                        param = {"dhs_ratio": [], "ids": []},
 #                        **args):
 #    """ DHS ratio indicate the percentage of peaks overlap with DHSs site.
@@ -70,7 +70,7 @@
 #    with open(output["rfilr"], 'w') as f:
 #        f.write(content)
 #
-#    os.system('Rscript %s' % output["rfile"])
+#    os.system('Rscript %s' % output["R"])
 #    latex_summary_table = {"desc":'Overlap with DHSs  ',
 #                         "data":'%s'%name,
 #                         "value":'%f'%dhs_ratio,

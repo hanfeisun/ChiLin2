@@ -4,23 +4,26 @@ import os
 import sys
 import re
 import argparse
+
 from samflow.command import ShellCommand, PythonCommand
 from samflow.workflow import Workflow, attach_back
-from chilin2.config import ChiLinConfig
 from pkg_resources import resource_filename
-from chilin2.function_template.qc_bowtie import qc_bowtie_summary_draw
-from chilin2.function_template.qc_fastqc_raw_sequence import python_fastqc_dist_draw
-from chilin2.function_template.qc_macs2 import qc_high_confident_peaks_draw, qc_non_redundant_rate_draw
-from chilin2.function_template.qc_venn_replicate import qc_replicate_parse, qc_venn
-from chilin2.function_template.qc_ceas import qc_redraw_ceas_graph
-from chilin2.function_template.qc_phast_conservation import qc_conservation_draw
-from chilin2.function_template.qc_mdseqpos import qc_mdseqpos_parse_and_filter_by_z_score, end_tex
-from chilin2.function_template.text_summary import text_bowtie_summary, macs2_summary, dhs_summary, velcro_summary
+
+from chilin2.config import ChiLinConfig
+from chilin2.function_template.qc_bowtie import stat_bowtie, latex_bowtie
+from chilin2.function_template.qc_ceas import stat_ceas, latex_ceas
+from chilin2.function_template.qc_fastqc_raw_sequence import stat_fastqc, latex_fastqc
+from chilin2.function_template.qc_macs2 import stat_macs2, stat_velcro, stat_dhs, stat_macs2_on_sample, latex_macs2, latex_macs2_on_sample
+from chilin2.function_template.qc_mdseqpos import stat_seqpos, latex_seqpos
+from chilin2.function_template.qc_phast_conservation import stat_conservation, latex_conservation
+from chilin2.function_template.qc_venn_replicate import stat_venn, stat_cor, latex_venn, latex_cor
+from chilin2.helpers import latex_end
+
 
 ChiLinQC_db = resource_filename("chilin2", "db/ChiLinQC.db")
-R_cumulative_template = resource_filename("chilin2", "jinja_template/R_culmulative_plot.R.jinja2")
-Latex_summary_report_template = resource_filename("chilin2", "jinja_template/Latex_summary_report.jinja2")
-text_summary_report_template = resource_filename("chilin2", "jinja_template/text_summary_report.jinja2")
+r_template = resource_filename("chilin2", "jinja_template/R_culmulative_plot.R.jinja2")
+latex_template = resource_filename("chilin2", "jinja_template/Latex_summary_report.jinja2")
+plain_template = resource_filename("chilin2", "jinja_template/text_summary_report.jinja2")
 
 
 class FriendlyArgumentParser(argparse.ArgumentParser):
@@ -73,7 +76,7 @@ def make_copy_command(orig, dest):
         name="copy")
 
 
-def prepare_groom_sequencing_files(workflow, conf):
+def _groom_sequencing_files(workflow, conf):
     """
     Return the file name pair (raw, target) that can't be groomed (neither fastq nor bam)
     These files (maybe BED files) can be captured and processed by other tools later
@@ -94,39 +97,43 @@ def prepare_groom_sequencing_files(workflow, conf):
         else:
             print(raw, " is neither fastq nor bam file. Skip grooming.")
             not_groomed.append([raw, target])
-    return not_groomed
 
 
-def prepare_raw_QC(workflow, conf):
+def _raw_QC(workflow, conf):
     for target in conf.sample_targets:
         fastqc_run = attach_back(workflow,
             ShellCommand(
                 "{tool} {input} --extract -t {param[threads]} -o {output[target_dir]}",
                 input=target + ".fastq",
                 output={"target_dir": conf.target_dir,
-                        "summary": target + "_fastqc/fastqc_data.txt"},
+                        "fastqc_summary": target + "_fastqc/fastqc_data.txt"},
                 tool="fastqc",
                 param={"threads": 4}))
         fastqc_run.update(param=conf.items("fastqc"))
 
-
-def prepare_raw_QC_Tex(workflow, conf):
-    Tex_step = attach_back(workflow,
+    attach_back(workflow,
         PythonCommand(
-            python_fastqc_dist_draw,
+            stat_fastqc,
             input={"db": ChiLinQC_db,
-                   "fastqc_summary_list": [target + "_fastqc/fastqc_data.txt" for target in conf.sample_targets],
-                   "R_template": R_cumulative_template,
-                   "latex_template": Latex_summary_report_template},
-            output={"rfile": conf.prefix + "_raw_sequence_qc.R",
-                    "latex_section": conf.prefix + "_raw_sequence_qc.tex",
-                    "pdf": conf.prefix + "_raw_sequence_qc.pdf"},
+                   "fastqc_summaries": [target + "_fastqc/fastqc_data.txt" for target in conf.sample_targets],
+                   "template": r_template},
+            output={"R": conf.prefix + "_raw_sequence_qc.R",
+                    "pdf": conf.prefix + "_raw_sequence_qc.pdf",
+                    "json": conf.json_prefix + "_fastqc.json"},
             param={"ids": conf.sample_bases,
                    "id": conf.id}))
-    return Tex_step.output["latex_section"]
 
 
-def prepare_bowtie(workflow, conf):
+def _raw_QC_latex(workflow, conf):
+    attach_back(workflow,
+        PythonCommand(
+            latex_fastqc,
+            input={"json": conf.json_prefix + "_fastqc.json",
+                   "template": latex_template},
+            output={"latex": conf.latex_prefix + "_fastqc.latex"}))
+
+
+def _bowtie(workflow, conf):
     for target in conf.sample_targets:
         bowtie = attach_back(workflow,
             ShellCommand(
@@ -142,34 +149,30 @@ def prepare_bowtie(workflow, conf):
                        "genome_index": conf.get_path("lib", "genome_index")}))
 
         bowtie.update(param=conf.items("bowtie"))
-    _prepare_sam2bam(workflow, conf)
+    __sam2bam(workflow, conf)
 
-
-def prepare_bowtie_plain(workflow, conf):
-    ## using bowtie standard error output 
+    ## using bowtie standard error output
     attach_back(workflow,
-        PythonCommand(text_bowtie_summary,
-            input={"data_template": text_summary_report_template,
-                   "bowtie_summary": [t + "_bowtie_summary.txt" for t in conf.sample_targets]},
-            output={"sum_section": conf.prefix + "_all_bowtie_summary"},
-            param={"sam_files": [t + ".sam" for t in conf.sample_targets], }))
-    return conf.prefix + "_all_bowtie_summary"
+        PythonCommand(stat_bowtie,
+            input={"bowtie_summaries": [t + "_bowtie_summary.txt" for t in conf.sample_targets],
+                   "db": ChiLinQC_db,
+                   "template": r_template},
+            output={"json": conf.json_prefix + "_bowtie.json",
+                    "R": conf.prefix + "_bowtie.R",
+                    "pdf": conf.prefix + "_bowtie.pdf"},
+            param={"sams": [t + ".sam" for t in conf.sample_targets], }))
 
 
-def prepare_bowtie_Tex(workflow, conf):
-    Tex_step = attach_back(workflow, PythonCommand(qc_bowtie_summary_draw,
-        input={"all_bowtie_summary": [target + "_bowtie_summary.txt" for target in conf.sample_targets],
-               "R_template": R_cumulative_template,
-               "latex_template": Latex_summary_report_template,
-               "db": ChiLinQC_db},
-        output={"rfile": conf.prefix + "pable_rate.R",
-                "pdf": conf.prefix + "pable_rate.pdf",
-                "latex_section": conf.prefix + "pable.tex"},
-        param={"ids": conf.sample_bases}))
-    return Tex_step.output["latex_section"]
+def _bowtie_latex(workflow, conf):
+    attach_back(workflow,
+        PythonCommand(
+            latex_bowtie,
+            input={"json": conf.json_prefix + "_bowtie.json",
+                   "template": latex_template},
+            output={"latex": conf.latex_prefix + "_bowtie.latex"}))
 
 
-def _prepare_sam2bam(workflow, conf):
+def __sam2bam(workflow, conf):
 # convert the files from SAM to BAM format
     for target in conf.sample_targets:
         attach_back(workflow,
@@ -184,7 +187,7 @@ def _prepare_sam2bam(workflow, conf):
         workflow.update(param=conf.items("sam2bam"))
 
 
-def prepare_macs2(workflow, conf):
+def _macs2(workflow, conf):
     # merge all treatments into one
     merge_bams_treat = ShellCommand(
         "{tool} merge {output[merged]} {param[bams]}",
@@ -268,27 +271,32 @@ def prepare_macs2(workflow, conf):
     bdg2bw_control.output["bw"] = conf.prefix + "_treat.bw"
     attach_back(workflow, bdg2bw_control)
 
-
-def prepare_macs2_Tex(workflow, conf):
-    Tex_step = attach_back(workflow, PythonCommand(
-        qc_high_confident_peaks_draw,
+    attach_back(workflow, PythonCommand(
+        stat_macs2,
         input={"macs2_peaks_xls": conf.prefix + "_peaks.xls",
-               "R_template": R_cumulative_template,
-               "latex_template": Latex_summary_report_template,
-               "db": ChiLinQC_db},
-        output={"rfile": conf.prefix + "_high_confident_peak_rate.R",
-                "latex_section": conf.prefix + "_high_confident.tex",
-                "pdf": conf.prefix + "_high_confident_peak_rate.pdf"},
-        param={"id": os.path.basename(conf.prefix)},
-        name="high_confident_peaks"
-    ))
-    return Tex_step.output["latex_section"]
+               "db": ChiLinQC_db,
+               "template": r_template},
+        output={"json": conf.json_prefix + "_macs2.json",
+                "R": conf.prefix + "_macs2.R",
+                "pdf": conf.prefix + "_macs2.pdf"},
+        param={"id": conf.id},
+        name="MACS2 summary"))
 
 
-def prepare_macs2_on_rep(workflow, conf):
+def _macs2_latex(workflow, conf):
+    attach_back(workflow,
+        PythonCommand(
+            latex_macs2,
+            input={"json": conf.json_prefix + "_macs2.json",
+                   "template": latex_template},
+            output={"latex": conf.latex_prefix + "_macs2.latex"}))
+
+
+def _macs2_on_sample(workflow, conf):
     # Though macs command already exists, I choose not to use prototype here
     # Because the prototype definition and usage might be far from each other, making codes not readable
 
+    # TODO: move the condition of rep here
     for target in conf.treatment_targets:
         macs2_on_rep = attach_back(workflow,
             ShellCommand(
@@ -343,23 +351,28 @@ def prepare_macs2_on_rep(workflow, conf):
         bdg2bw_controlrep.output = target + "_treat.bw"
         attach_back(workflow, bdg2bw_controlrep)
 
-
-def prepare_macs2_on_rep_Tex(workflow, conf):
-    Tex_step = attach_back(workflow,
+    attach_back(workflow,
         PythonCommand(
-            qc_non_redundant_rate_draw,
+            stat_macs2_on_sample,
             input={"all_peak_xls": [target + "_peaks.xls" for target in conf.treatment_targets],
                    "db": ChiLinQC_db,
-                   "R_template": R_cumulative_template,
-                   "latex_template": Latex_summary_report_template},
-            output={"rfile": conf.prefix + "_redundant_dist.R",
-                    "latex_section": conf.prefix + "_redundant.tex",
-                    "pdf": conf.prefix + "_redundant_dist.pdf"},
+                   "template": r_template},
+            output={"R": conf.prefix + "_macs2_on_sample.R",
+                    "json": conf.json_prefix + "_macs2_on_sample.json",
+                    "pdf": conf.prefix + "_macs2_on_sample.pdf"},
             param={"ids": conf.treatment_bases}))
-    return Tex_step.output["latex_section"]
 
 
-def prepare_macs2_venn_on_rep(workflow, conf):
+def _macs2_on_sample_latex(workflow, conf):
+    attach_back(workflow,
+        PythonCommand(
+            latex_macs2_on_sample,
+            input={"json": conf.json_prefix + "_macs2_on_sample.json",
+                   "template": latex_template},
+            output={"latex": conf.latex_prefix + "_macs2_on_sample.latex"}))
+
+
+def _macs2_venn(workflow, conf):
     # awk and bedClip to remove outlier for venn and correlation plot
     for target in conf.treatment_targets:
         bed_filter = attach_back(workflow,
@@ -391,18 +404,23 @@ def prepare_macs2_venn_on_rep(workflow, conf):
     venn_on_peaks.param = {"beds": " ".join(venn_on_peaks.input)}
     venn_on_peaks.allow_fail = True
 
-
-def prepare_macs2_venn_on_rep_Tex(workflow, conf):
-    Tex_step = attach_back(workflow,
+    attach_back(workflow,
         PythonCommand(
-            qc_venn,
-            input={"venn": conf.prefix + "_venn.png",
-                   "latex_template": Latex_summary_report_template},
-            output={"latex_section": conf.prefix + "_venn.tex"}))
-    return Tex_step.output["latex_section"]
+            stat_venn,
+            input={"venn": conf.prefix + "_venn.png"},
+            output={"json": conf.json_prefix + "_venn.json"}))
 
 
-def prepare_macs2_cor_on_rep(workflow, conf):
+def _macs2_venn_latex(workflow, conf):
+    attach_back(workflow,
+        PythonCommand(
+            latex_venn,
+            input={"json": conf.json_prefix + "_venn.json",
+                   "template": latex_template},
+            output={"latex": conf.latex_prefix + "_venn.latex"}))
+
+
+def _macs2_cor(workflow, conf):
     cor_on_bw = attach_back(workflow,
         ShellCommand(
             template=
@@ -423,20 +441,25 @@ def prepare_macs2_cor_on_rep(workflow, conf):
     cor_on_bw.update(param=conf.items("correlation"))
     cor_on_bw.allow_fail = True
 
-
-def prepare_macs2_cor_on_rep_Tex(workflow, conf):
-    Tex_step = attach_back(workflow,
+    attach_back(workflow,
         PythonCommand(
-            qc_replicate_parse,
+            stat_cor,
             input={"correlation_R": conf.prefix + "_cor.R",
-                   "latex_template": Latex_summary_report_template,
                    "cor_pdf": conf.prefix + "_cor.pdf"},
-            output={"latex_section": conf.prefix + "_cor.tex"}))
-    return Tex_step.output["latex_section"]
+            output={"json": conf.json_prefix + "_cor.json"}))
 
 
-def prepare_DHS_overlap(workflow, conf):
-    DHS_overlap = attach_back(workflow,
+def _macs2_cor_latex(workflow, conf):
+    attach_back(workflow,
+        PythonCommand(
+            latex_cor,
+            input={"json": conf.json_prefix + "_cor.json",
+                   "template": latex_template},
+            output={"latex": conf.latex_prefix + "_cor.latex"}))
+
+
+def _DHS_overlap(workflow, conf):
+    attach_back(workflow,
         ShellCommand(
             "{tool} -wa -u  \
             -a {input[MACS2_bed]} -b {input[DHS_peaks_bed]} > {output}",
@@ -446,9 +469,17 @@ def prepare_DHS_overlap(workflow, conf):
             output=conf.prefix + "_DHS_overlap_peaks_bed",
             param=None))
 
+    attach_back(workflow, PythonCommand(
+        stat_dhs,
+        input={"dhs_peaks": conf.prefix + "_DHS_overlap_peaks_bed",
+               "macs2_peaks_xls": conf.prefix + "_peaks.xls"},
+        output={"json": conf.json_prefix + "_dhs.json"},
+        param=None,
+        name="DHS summary"))
 
-def prepare_velcro_overlap(workflow, conf):
-    velcro_overlap = attach_back(workflow,
+
+def _velcro_overlap(workflow, conf):
+    attach_back(workflow,
         ShellCommand(
             "{tool} -wa -u  \
             -a {input[MACS2_bed]} -b {input[velcro_peaks_bed]} > {output}",
@@ -458,43 +489,16 @@ def prepare_velcro_overlap(workflow, conf):
             output=conf.prefix + "_velcro_overlap_peaks_bed",
             param=None))
 
-
-def prepare_macs2_plain(workflow, conf):
-    # using macs2 merged peaks.xls information for unique location and peaks summary
-    # DHS peaks and Velcro peaks summary
-    plain_step = attach_back(workflow, PythonCommand(
-        macs2_summary,
-        input={"data_template": text_summary_report_template,
+    attach_back(workflow, PythonCommand(
+        stat_velcro,
+        input={"velcro_peaks": conf.prefix + "_velcro_overlap_peaks_bed",
                "macs2_peaks_xls": conf.prefix + "_peaks.xls"},
-        output={"sum_section": conf.prefix + "_peaks_summary"},
-        param=None,
-        name="MACS2 summary"))
-    return plain_step.output["sum_section"]
-
-
-def prepare_peaks_dhs_plain(workflow, conf):
-    plain_step = attach_back(workflow, PythonCommand(
-        dhs_summary,
-        input={"data_template": text_summary_report_template, "dhs_peaks": conf.prefix + "_DHS_overlap_peaks_bed",
-               "macs2_peaks_xls": conf.prefix + "_peaks.xls"},
-        output={"sum_section": conf.prefix + "_dhs_summary"},
-        param=None,
-        name="DHS summary"))
-    return plain_step.output["sum_section"]
-
-
-def prepare_peaks_velcro_plain(workflow, conf):
-    plain_step = attach_back(workflow, PythonCommand(
-        velcro_summary,
-        input={"data_template": text_summary_report_template, "velcro_peaks": conf.prefix + "_velcro_overlap_peaks_bed",
-               "macs2_peaks_xls": conf.prefix + "_peaks.xls"},
-        output={"sum_section": conf.prefix + "_velcro_summary"},
+        output={"json": conf.json_prefix + "_velcro.json"},
         param=None,
         name="Velcro summary"))
-    return plain_step.output["sum_section"]
 
 
-def prepare_ceas(workflow, conf):
+def _ceas(workflow, conf):
     get_top_peaks = attach_back(workflow,
         ShellCommand(
             "{tool} -r -g -k 5 {input} | head -n {param[peaks]} > {output}",
@@ -522,23 +526,27 @@ def prepare_ceas(workflow, conf):
             name="ceas"))
     ceas.update(param=conf.items("ceas"))
 
-
-def prepare_ceas_Tex(workflow, conf):
-    Tex_step = attach_back(workflow,
+    attach_back(workflow,
         PythonCommand(
-            qc_redraw_ceas_graph,
+            stat_ceas,
             input={"macs2_peaks_xls": conf.prefix + "_peaks.xls",
-                   "ceas_rscript": conf.prefix + "_ceas.R",
-                   "latex_template": Latex_summary_report_template},
-            output={"rfile": conf.prefix + "_qc_ceas.R",
+                   "ceas_rscript": conf.prefix + "_ceas.R", },
+            output={"R": conf.prefix + "_qc_ceas.R",
                     "peakheight_and_pie_pdf": conf.prefix + "_peakheight_and_pie.pdf",
                     "metagene_dist_pdf": conf.prefix + "_metagene_dist.pdf",
-                    "latex_section": conf.prefix + "_ceas_qc.tex",
-            }, ))
-    return Tex_step.output["latex_section"]
+                    "json": conf.json_prefix + "_ceas.json"}, ))
 
 
-def prepare_phast_conservation(workflow, conf):
+def _ceas_latex(workflow, conf):
+    attach_back(workflow,
+        PythonCommand(
+            latex_ceas,
+            input={"json": conf.json_prefix + "_ceas.json",
+                   "template": latex_template},
+            output={"latex": conf.latex_prefix + "_ceas.latex"}))
+
+
+def _conservation(workflow, conf):
     get_top_peaks = attach_back(workflow,
         ShellCommand(
             "{tool} -r -g -k 5 {input} | head -n {param[peaks]} > {output}",
@@ -573,25 +581,28 @@ def prepare_phast_conservation(workflow, conf):
             output={"pdf": conf.prefix + "conserv.pdf", "R": conf.prefix + "conserv.R"},
             name="convert pdf to png", ))
 
-
-def prepare_phast_conservation_Tex(workflow, conf):
-    Tex_step = attach_back(workflow,
+    attach_back(workflow,
         PythonCommand(
-            qc_conservation_draw,
+            stat_conservation,
             input={"conservationR": conf.prefix + "conserv.R",
-                   "historical_conservation_cluster_text": resource_filename("chilin2", "db/TF_centers.txt"),
-                   "latex_template": Latex_summary_report_template},
-            output={"rfile": conf.prefix + "_qc_conserv_compare.R",
+                   "historical_conservation_cluster_text": resource_filename("chilin2", "db/TF_centers.txt")},
+            output={"R": conf.prefix + "_qc_conserv_compare.R",
                     "compare_pdf": conf.prefix + "_qc_conserv_compare.pdf",
                     "pdf": conf.prefix + "conserv.pdf",
-                    "latex_section": conf.prefix + "_conserv_qc.tex"},
-            param={"atype": conf.get("Basis", "type", "TF"), "id": conf.id})
-    )
-
-    return Tex_step.output["latex_section"]
+                    "json": conf.json_prefix + "_conserv.json"},
+            param={"atype": conf.get("Basis", "type", "TF"), "id": conf.id}))
 
 
-def prepare_mdseqpos(workflow, conf):
+def _conservation_latex(workflow, conf):
+    attach_back(workflow,
+        PythonCommand(
+            latex_conservation,
+            input={"json": conf.json_prefix + "_conserv.json",
+                   "template": latex_template},
+            output={"latex": conf.latex_prefix + "_conserv.latex"}))
+
+
+def _seqpos(workflow, conf):
     # This will work for only Human and Mouse
     # MDseqpos take uniform input, we need to remove random sequence part and get top 1000 summits
     get_top_summits = attach_back(workflow,
@@ -620,60 +631,29 @@ def prepare_mdseqpos(workflow, conf):
             output=conf.prefix + "_seqpos",
             name="mv seqpos"))
 
-
-def prepare_mdseqpos_Tex(workflow, conf):
-    Tex_step = attach_back(workflow,
+    attach_back(workflow,
         PythonCommand(
-            qc_mdseqpos_parse_and_filter_by_z_score,
-            input={"seqpos": conf.prefix + "_seqpos/" + "mdseqpos_out.html",
-                   "latex_template": Latex_summary_report_template},
-            output={"latex_section": conf.prefix + "_seqpos.tex"},
+            stat_seqpos,
+            input={"seqpos": conf.prefix + "_seqpos/" + "mdseqpos_out.html"},
+            output={"json": conf.json_prefix + "_seqpos.json"},
             param={"z_score_cutoff": -15}))
-    return Tex_step.output["latex_section"]
 
 
-def prepare_Tex_ending(workflow, conf):
-    Tex_step = attach_back(workflow,
-        PythonCommand(end_tex,
-            input=Latex_summary_report_template,
-            output={"latex_section": conf.prefix + "_end.tex"},
-            param=None))
-    return Tex_step.output["latex_section"]
+def _seqpos_latex(workflow, conf):
+    attach_back(workflow,
+        PythonCommand(
+            latex_seqpos,
+            input={"json": conf.json_prefix + "_seqpos.json",
+                   "template": latex_template},
+            output={"latex": conf.latex_prefix + "_seqpos.latex"}))
 
 
-def prepare_report_summary(workflow, conf, latex_combined, text_combined):
-    if text_combined:
-        attach_back(workflow,
-            ShellCommand(
-                "{tool} {param[input]} > {output}",
-                tool="cat",
-                input=text_combined,
-                output=conf.prefix + "_summary.txt",
-                param={"input": ' '.join(text_combined)},
-                name="cat text summary"))
-    if latex_combined:
-        attach_back(workflow,
-            ShellCommand(
-                "{tool} {param[input]} > {output}",
-                input=latex_combined,
-                output=conf.prefix + "_report.tex",
-                param={"input": " ".join(latex_combined)},
-                tool="cat",
-                name="cat latex"))
-
-        attach_back(workflow,
-            ShellCommand(
-                # Somehow the pdflatex has to be invoked twice..
-                "{tool} -output-directory {output[dir]} -jobname={param[name]} {input} \
-                && {tool} -output-directory {output[dir]} -jobname={param[name]} {input}",
-
-                tool="pdflatex",
-                input=conf.prefix + "_report.tex",
-                # output[pdf] should use "conf.prefix" to have the absolute path
-                output={"dir": conf.target_dir, "pdf": conf.prefix + "_report.pdf"},
-                # param[name] should use "conf.id" to avoid using absolute path
-                param={"name": conf.id + "_report"},
-                name="report"))
+def _ending_latex(workflow, conf):
+    attach_back(workflow,
+        PythonCommand(
+            latex_end,
+            input={"template": latex_template},
+            output={"latex": conf.latex_prefix + "_ending.latex"}))
 
 
 class StepChecker:
@@ -698,21 +678,15 @@ class ChiLinBuilder:
         self.conf = conf
         self.LaTex_fragments = []
         self.plain_fragments = []
+        self.finished = set()
 
-    def build(self, prep_func):
+    def build(self, prep_func, tag=None):
         prep_func(self.workflow, self.conf)
+        if tag:
+            self.finished.add(tag)
 
     def attach_back(self, command):
         attach_back(self.workflow, command)
-
-    def build_LaTex(self, Tex_prep_func):
-        self.LaTex_fragments.append(Tex_prep_func(self.workflow, self.conf))
-
-    def build_plain(self, plain_prep_func):
-        self.plain_fragments.append(plain_prep_func(self.workflow, self.conf))
-
-    def build_summary(self, summary_prep_func):
-        summary_prep_func(self.workflow, self.conf, self.LaTex_fragments, self.plain_fragments)
 
 
 def create_workflow(args, conf, step_checker : StepChecker):
@@ -723,7 +697,7 @@ def create_workflow(args, conf, step_checker : StepChecker):
 
 
     # Whether there are replicates for treatment group
-    have_reps = len(conf.treatment_pairs) >= 2
+    have_treat_reps = len(conf.treatment_pairs) >= 2
     has_dhs = conf.get("lib", "dhs")
     has_velcro = conf.get("lib", "velcro")
     need_run = step_checker.need_run
@@ -735,63 +709,52 @@ def create_workflow(args, conf, step_checker : StepChecker):
         output=conf.target_dir))
 
     if need_run(1):
-        bld.build(prepare_groom_sequencing_files)
+        bld.build(_groom_sequencing_files)
 
     if need_run(2):
-        bld.build(prepare_raw_QC)
-
-        bld.build_LaTex(prepare_raw_QC_Tex)
+        bld.build(_raw_QC)
+        bld.build(_raw_QC_latex)
 
     if need_run(3):
-        bld.build(prepare_bowtie)
-
-        bld.build_LaTex(prepare_bowtie_Tex)
-        bld.build_plain(prepare_bowtie_plain)
+        bld.build(_bowtie)
+        bld.build(_bowtie_latex)
 
     if need_run(4):
-        bld.build(prepare_macs2)
+        bld.build(_macs2)
+        bld.build(_macs2_latex)
 
-        bld.build_LaTex(prepare_macs2_Tex)
-        bld.build_plain(prepare_macs2_plain)
+    if need_run(5):
+        bld.build(_macs2_on_sample)
+        bld.build(_macs2_on_sample_latex)
 
-    if have_reps:
-        if need_run(5):
-            bld.build(prepare_macs2_on_rep)
-            bld.build_LaTex(prepare_macs2_Tex)
-
+    if have_treat_reps:
         if need_run(6):
-            bld.build(prepare_macs2_venn_on_rep)
-            bld.build_LaTex(prepare_macs2_venn_on_rep_Tex)
+            bld.build(_macs2_venn)
+            bld.build(_macs2_venn_latex)
 
         if need_run(7):
-            bld.build(prepare_macs2_cor_on_rep)
-            bld.build_LaTex(prepare_macs2_cor_on_rep_Tex)
+            bld.build(_macs2_cor)
+            bld.build(_macs2_cor_latex)
 
     if has_dhs and need_run(8):
-        bld.build(prepare_DHS_overlap)
-
-        bld.build_plain(prepare_peaks_dhs_plain)
+        bld.build(_DHS_overlap)
 
     if has_velcro and need_run(9):
-        bld.build(prepare_velcro_overlap)
-        bld.build_plain(prepare_peaks_velcro_plain)
+        bld.build(_velcro_overlap)
 
     if need_run(10):
-        bld.build(prepare_ceas)
-        bld.build_LaTex(prepare_ceas_Tex)
+        bld.build(_ceas)
+        bld.build(_ceas_latex)
 
     if need_run(11):
-        bld.build(prepare_phast_conservation)
-        bld.build_LaTex(prepare_phast_conservation_Tex)
+        bld.build(_conservation)
+        bld.build(_conservation_latex)
 
     if need_run(12):
-        bld.build(prepare_mdseqpos)
-        bld.build_LaTex(prepare_mdseqpos_Tex)
+        bld.build(_seqpos)
+        bld.build(_seqpos_latex)
 
-    if need_run(13):
-        if bld.LaTex_fragments:
-            bld.build_LaTex(prepare_Tex_ending)
-            bld.build_summary(prepare_report_summary)
+    bld.build(_ending_latex)
 
     if args.clean:
         print("test for clean")
@@ -822,4 +785,4 @@ def main(args=None):
     workflow.invoke()
 
 if __name__ == "__main__":
-    main()                      
+    main()

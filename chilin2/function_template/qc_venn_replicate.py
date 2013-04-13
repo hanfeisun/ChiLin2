@@ -1,13 +1,15 @@
+import json
 import re
 import subprocess
-from chilin2.jinja_template_render import JinjaTemplateCommand, write_into
+from chilin2.helpers import JinjaTemplateCommand, template_dump, json_dump, json_load
 
-def qc_replicate_parse(input={"correlation_R":"", "cor_pdf": "", "venn": "", "latex_template":""},
-                       output={"latex_section": ""}, param=None):
+def stat_cor(input={"correlation_R":"", "cor_pdf": "", "venn": "", },
+             output={"json": ""}, param=None):
+    # TODO: merge this into stat_venn
     """ ReplicateQC aims to describe the similarity of replicate experiment. Venn diagram and correlation plot will be used."""
 
-    correlation_result_R_code = open(input["correlation_R"]).read()
-    signal_list = re.findall(r"[pc]\d? <- (.*)$", correlation_result_R_code)
+    correlation_result_r_code = open(input["correlation_R"]).read()
+    signal_list = re.findall(r"[pc]\d? <- (.*)$", correlation_result_r_code)
 
     rep_count = len(signal_list)
     correlation_value_list = []
@@ -26,27 +28,41 @@ def qc_replicate_parse(input={"correlation_R":"", "cor_pdf": "", "venn": "", "la
     else:
         judge = 'Fail'
 
-    latex_summary_table = ['Replication QC','%d rep treatment'%rep_count,'%s'%str(min_correlation),'0.6',judge]
-    print(latex_summary_table)
-    replicate_latex = JinjaTemplateCommand(
-            name = "venn and correlation",
-            template = input["latex_template"],
-            param = {"section_name": "correlation",
-                     "correlation_graph": input["cor_pdf"]})
-    replicate_latex.allow_fail = True
-    
-    write_into(replicate_latex, output["latex_section"])
-    return {}
+
+    result_dict = {"stat": {}, "input": input, "output": output, "param": param}
+    result_dict["stat"]["judge"] = judge
+
+    json_dump(result_dict)
+
+def latex_cor(input, output, param):
+    json_dict = json_load(input["json"])
+    latex = JinjaTemplateCommand(
+        name = "correlation",
+        template = input["template"],
+        param = {"section_name": "correlation",
+                 "correlation_graph": json_dict["input"]["cor_pdf"],
+                 "render_dump": output["latex"]})
+    template_dump(latex)
 
 
-def qc_venn(input = {"venn": "", "latex_template": ""}, output = {"latex_section": ""}, param=None):
-    venn_latex = JinjaTemplateCommand(
+
+
+def stat_venn(input={"venn": ""}, output={"json",""}, param=None):
+    result_dict = {"stat": {}, "input": input, "output": output, "param": param}
+    json_dump(result_dict)
+
+
+def latex_venn(input, output, param):
+    json_dict = json_load(input["json"])
+    latex = JinjaTemplateCommand(
         name = "venn diagram latex",
-
-        template = input["latex_template"],
+        template = input["template"],
         param = {"section_name": "venn",
-                 "venn_graph": input["venn"],
-                 }
-    )
-    venn_latex.allow_fail = True
-    write_into(venn_latex, output["latex_section"])
+                 "venn_graph": json_dict["input"]["venn"],
+                 "render_dump": output["latex"]})
+    template_dump(latex)
+
+
+
+
+

@@ -1,6 +1,6 @@
 import re
 import json
-from chilin2.jinja_template_render import JinjaTemplateCommand, write_into
+from chilin2.helpers import JinjaTemplateCommand, template_dump, json_load
 
 def _extract_traverse_tree(tree):
 
@@ -15,8 +15,8 @@ def _extract_traverse_tree(tree):
 
     return result_list
 
-# TODO: parse ?
-def qc_mdseqpos_parse_and_filter_by_z_score(input = {"latex_template": "", "seqpos": ""}, output={"latex_section": ""}, param = {"z_score_cutoff":-15}):
+
+def stat_seqpos(input = {"template": "", "seqpos": ""}, output={"latex_section": ""}, param = {"z_score_cutoff":-15}):
     """parrase mdsepose html file"""
     z_score_cutoff = param["z_score_cutoff"]
     seqpos_html_content = open(input['seqpos']).read()
@@ -55,21 +55,24 @@ def qc_mdseqpos_parse_and_filter_by_z_score(input = {"latex_template": "", "seqp
     if satisfied_count < 5:
         satisfied_motif_list = all_motif_list[:5]
 
-    motif_latex = JinjaTemplateCommand(
+    result_dict = {"stat": {}, "input": input, "output": output, "param": param}
+    result_dict["stat"]["satisfied_motifs"] = satisfied_motif_list
+    with open(output["json"], "w") as f:
+        json.dump(result_dict, f, indent=4)
+
+def latex_seqpos(input, output, param):
+    json_dict = json_load(input["json"])
+
+    latex = JinjaTemplateCommand(
         name = "motif finding",
-        template = input["latex_template"],
-        param = {"motif_table": satisfied_motif_list,
-                 "section_name": "motif"}
-        )
-    write_into(motif_latex, output["latex_section"])
+        template = input["template"],
+        param = {"motif_table": json_dict["stat"]["satisfied_motifs"],
+                 "section_name": "motif",
+                 "render_dump": output["latex"]})
 
-    return satisfied_motif_list
+    template_dump(latex)
 
-def end_tex(input = "", output = {"latex_section": ""}, param = {}):
-    end_latex = JinjaTemplateCommand(
-        name = "end of latex document",
-        template = input,
-        param = {"section_name": "ending"})
-    
-    write_into(end_latex, output["latex_section"])
+
+
+
 

@@ -1,8 +1,8 @@
 """
 separate latex template to several object
 """
-import subprocess
-from jinja2 import Environment, FileSystemLoader, PackageLoader
+import json
+from jinja2 import Environment, FileSystemLoader
 from samflow.command import AbstractCommand, ShellCommand
 
 env = Environment(loader = FileSystemLoader("/"),
@@ -40,17 +40,34 @@ class JinjaTemplateCommand(AbstractCommand):
         print("Rendering Latex part %s" % self.name, self.template)
         return True
 
-def write_into(jinja_template, file_path):
+def template_dump(jinja_template):
     jinja_template.invoke()
-    with open(file_path, "w") as f:
+    with open(jinja_template.param["render_dump"], "w") as f:
         f.write(jinja_template.result)
 
-def write_and_run_Rscript(jinja_template_r, file_path):
-    write_into(jinja_template_r, file_path)
-    # Use ShellCommand as it displays more friendly
-    ShellCommand(template="Rscript {input}", input=file_path).invoke()
+def r_exec(jinja_template_r):
+    ShellCommand(template="Rscript {input}",
+        input=jinja_template_r.param["render_dump"],
+        output=jinja_template_r.param["pdf"]).invoke()
+
+def json_dump(json_dict):
+    json_file = json_dict["output"]["json"]
+    with open(json_file, "w") as f:
+        json.dump(json_dict, f, indent=4)
+    return json_file
+
+def json_load(json_file):
+    with open(json_file, "r") as f:
+        json_dict = json.load(f)
+    return json_dict
 
 
+def latex_end(input = {"template": ""}, output = {"latex": ""}, param = {}):
+    end_latex = JinjaTemplateCommand(
+        name = "end of latex document",
+        template = input["template"],
+        param = {"section_name": "ending",
+                 "render_dump": output["latex"]
+                 })
 
-
-
+    template_dump(end_latex)

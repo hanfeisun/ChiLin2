@@ -1,99 +1,102 @@
-import os
+import json
 import sqlite3
 import math
-from samflow.command import ShellCommand, ThrowableShellCommand
 
-from chilin2.jinja_template_render import JinjaTemplateCommand, write_and_run_Rscript, write_into
-
-
-# TODO: Check whether _check can be separated
-#def _check(input,output=[]):
-#    """ Check whether the quality of the dataset is ok.
-#    vcb is the callback function for value"""
-#    ord = lambda x:[x["desc"], x["data"], x["value"], x["cutoff"], x["test"]]
-#    if len(input)!=0:
-#        for i in input:
-#            value = float(i["value"]),3
-#            cutoff = float(i["cutoff"]),3
-#            if value >= cutoff:
-#                i["test"] = 'Pass'
-#                output.append(ord(i))
-#            else:
-#                i["test"] = 'Fail'
-#                output.append(ord(i))
-#        return output
-#
-#
-def _qc_peak_summary_parse(input={"macs2_peaks_xls": ""},
-                              param={"id": ""}):
-    """Basic statistic of peak calling result."""
-    name = 'dataset'+ param["id"]
-    shift_size = 0
-    with open(input["macs2_peaks_xls"],"rU") as fhd:
-        fold_enrichment_list = []
-        for i in fhd:
-            i = i.strip()
-            if i.startswith("# qvalue cutoff"):
-                q_value_cutoff = float(i.split('=')[1])
-                continue
-
-            if i.startswith("#") or i.startswith("chr\t") or not i:
-                continue
-            if i.startswith("# d"): # parse shift-size, # d =
-                shift_size = int(i.strip().split("=")[1])/2
-
-            fold_enrichment = float(i.split("\t")[7]) #8th column is fold change
-            fold_enrichment_list.append(fold_enrichment)
+from chilin2.helpers import JinjaTemplateCommand, template_dump, r_exec, json_load
 
 
-        fold_greater_than_10_peaks = [x for x in fold_enrichment_list if x >= 10]
-        total_peak_count = len(fold_enrichment_list)
+def _peaks_parse(input):
+    total = 0
+    fc20n = 0
+    fc10n = 0
+    peaks_info = {}
+    with open(input) as peaks_xls:
+        for line in peaks_xls:
+            if line.startswith('# tags after filtering in treatment'):
+                # tags after filtering in treatment: 13438948
+                peaks_info["uniloc"] = int(line.strip().split(":")[1])
+            if line.startswith('# d'):
+                peaks_info["distance"] = int(line.strip().split("=")[1])
+            if line.strip() != "" and not line.startswith("#") and not line.startswith("chr\t"):
+                l = line.strip().split("\t")
+                total += 1
+                ## column 7th denotes fold change value
+                fc = float(l[7])
+                if fc >= 20:
+                    fc20n += 1
+                if fc >= 10:
+                    fc10n += 1
+            if line.startswith("# qvalue cutoff"):
+                q_value_cutoff = float(line.split('=')[1])
+            if line.startswith("# d"): # parse shift-size, # d =
+                shift_size = int(line.strip().split("=")[1])/2
 
-        fold_greater_than_10_peaks_count = len(fold_greater_than_10_peaks)
-    peaks_summary = [name, q_value_cutoff, total_peak_count,fold_greater_than_10_peaks_count, shift_size]
+    peaks_info["totalpeak"] = total
+    peaks_info["peaksge20"] = fc20n
+    peaks_info["peaksge10"] = fc10n
+    peaks_info["peaksge20ratio"] = peaks_info["peaksge20"] / peaks_info["totalpeak"]
+    peaks_info["peaksge10ratio"] = peaks_info["peaksge10"] / peaks_info["totalpeak"]
+    peaks_info["qvalue"] = q_value_cutoff
+    peaks_info["shiftsize"] = shift_size
+    return peaks_info
 
-#    latex_summary_table = {"desc":'Peaks number with fold change greater than 10X  ',
-#                         "data": name,
-#                         "value": fold_greater_than_10_peaks_count,
-#                         "cutoff":1000}
-
-    return {"peaks_summary":peaks_summary,"fold_gt_10_peaks_count":fold_greater_than_10_peaks_count}
 
 
-def qc_high_confident_peaks_draw(input={"macs2_peaks_xls": "", "latex_template": "","db": "", "R_template": ""},
-                             output={"rfile": "", "latex_section": "", "pdf": ""},
-                             param={"id": ""}):
-    """ cummulative plot of peaks fold change greater than 10"""
-#    param = fetch(param)
-    peaks_summary_result = _qc_peak_summary_parse(input=input, param = param)
+def stat_macs2(input={"macs2_peaks_xls": "", "db": "", "template": ""},
+               output={"R": "", "json": "", "pdf": ""},
+               param={"id": ""}):
+    json_dict = {"stat": {}, "input": input, "output": output, "param": param}
+    json_dict["stat"] = _peaks_parse(input["macs2_peaks_xls"])
 
     name = [param["id"]]
     db = sqlite3.connect(input["db"]).cursor()
     db.execute("select peak_fc_10 from peak_calling")
-    historyData = [math.log(i[0]+0.001,10) for i in db.fetchall() if i[0] > 0]
+    historyData = [math.log(i[0] + 0.001, 10) for i in db.fetchall() if i[0] > 0]
 
-    high_confident_peaks_R = JinjaTemplateCommand(name="highpeaksQC",
-        template=input["R_template"],
+    high_confident_peaks_r = JinjaTemplateCommand(name="highpeaksQC",
+        template=input["template"],
         param={'historic_data': historyData,
-               'current_data': [math.log(peaks_summary_result["fold_gt_10_peaks_count"]+0.01,10)],    #
+               'current_data': [math.log(json_dict["stat"]["peaksge10"] + 0.01, 10)], #
                'ids': name,
                'cutoff': 3,
                'main': 'High confidence peaks distribution',
                'xlab': 'log(Number of Peaks fold greater than 10)',
                'ylab': 'fn(log(Number of Peaks fold greater than 10))',
-               "pdf": output["pdf"]})
 
-    write_and_run_Rscript(high_confident_peaks_R, output["rfile"])
+               "pdf": output["pdf"],
+               "render_dump": output["R"]})
+
+    template_dump(high_confident_peaks_r)
+    r_exec(high_confident_peaks_r)
+
+    with open(output["json"], "w") as f:
+        json.dump(json_dict, f)
+
+
+def latex_macs2(input, output, param):
+    # TODO: qian work out the peaks_summary_result part
+
+
+    json_dict = json_load(input["json"])
+
+    summary = [json_dict["param"]["id"],
+               json_dict["stat"]["qvalue"],
+               json_dict["stat"]["totalpeak"],
+               json_dict["stat"]["peaksge10"],
+               json_dict["stat"]["shiftsize"]]
+
     high_confident_latex = JinjaTemplateCommand(
         name = "high confident latex",
-        template = input["latex_template"],
+        template = input["template"],
         param = {"section_name": "high_confident_peaks",
-                 "peak_summary_table": peaks_summary_result["peaks_summary"],
-                 "high_confident_peak_graph": output["pdf"]})
-    write_into(high_confident_latex, output['latex_section'])
-    return {}
+                 "peak_summary_table": summary,
+                 "high_confident_peak_graph": json_dict["output"]["pdf"],
+                 "render_dump": output["latex"]})
 
-def _qc_redundant_rate_parse(input={"all_peak_xls":[]}, param = {"ids": []}):
+    template_dump(high_confident_latex)
+
+
+def _redundant_parse(input={"all_peak_xls":[]}, param = {"ids": []}):
     redundant_ratio_list = []
     for a_xls in input["all_peak_xls"]:
         with open(a_xls,"rU" ) as fhd:
@@ -103,40 +106,78 @@ def _qc_redundant_rate_parse(input={"all_peak_xls":[]}, param = {"ids": []}):
                     break
     return redundant_ratio_list
 
-def qc_non_redundant_rate_draw(input={"all_peak_xls": [],"db": "", "latex_template": "","R_template": ""},
-                    output={"rfile": "", "latex_section": "", "pdf": ""},
-                    param = {"ids": []}):
+def stat_macs2_on_sample(input={"all_peak_xls": [], "db": "", "template": "", "template": ""},
+                         output={"R": "", "json": "", "pdf": ""},
+                         param={"ids": []}):
     """ Show redundant  ratio of the dataset in all historic data
     """
+    json_dict = {"stat": {}, "input": input, "output": output, "param": param}
 
-    non_redundant_rate_list = [1 - i for i in _qc_redundant_rate_parse(input=input, param = param)]
+    non_redundant_rates = [1 - i for i in _redundant_parse(input=input, param=param)]
+
+    for id, non_redundant_rate in zip(param["ids"], non_redundant_rates):
+        json_dict["stat"][id] = {"non_redundant_rate": non_redundant_rate}
 
     db = sqlite3.connect(input["db"]).cursor()
 
     # TODO: column name redundant_rate => non-redundant rate
     db.execute("select redundant_rate from peak_calling")
     redundant_history = db.fetchall()
-    historyData = [1-float(i[0]) for i in redundant_history if i[0] != "null"]
-    
+    historyData = [1 - float(i[0]) for i in redundant_history if i[0] != "null"]
 
     redundant_rate_R = JinjaTemplateCommand(name="redunRateQC",
-        template=input["R_template"],
+        template=input["template"],
         param={'historic_data': historyData,
-               'current_data': non_redundant_rate_list,
+               'current_data': non_redundant_rates,
                'ids': param["ids"],
                'cutoff': 0.8,
                'main': 'Non-Redundant rate',
                'xlab': 'Non-Redundant rate',
                'ylab': 'fn(Non-Redundant rate)',
                "pdf": output["pdf"],
+               "render_dump": output["R"],
                "need_smooth_curve": True})
-    
-    write_and_run_Rscript(redundant_rate_R, output["rfile"])
-    redundant_rate_latex = JinjaTemplateCommand(
-        name="redunRateQC",
-        template=input["latex_template"],
-        param = {"section_name": "redundant",
-                 "redundant_ratio_graph": output["pdf"]})
 
-    write_into(redundant_rate_latex, output['latex_section'])
-    return {}
+    template_dump(redundant_rate_R)
+    r_exec(redundant_rate_R)
+
+    with open(output["json"], "w") as f:
+        json.dump(json_dict, f, indent=4)
+
+def latex_macs2_on_sample(input, output, param):
+    json_dict = json_load(input["json"])
+    latex = JinjaTemplateCommand(
+        name="redunRateQC",
+        template=input["template"],
+        param = {"section_name": "redundant",
+                 "redundant_ratio_graph": json_dict["output"]["pdf"],
+                 "render_dump": output["latex"]})
+
+    template_dump(latex)
+
+
+
+def stat_velcro(input={"macs2_peaks_xls": "", "velcro_peaks": ""}, output={"json": ""},
+                param={}):
+    peaks_info = _peaks_parse(input["macs2_peaks_xls"])
+    peaks_info["velcro"] = len(open(input["velcro_peaks"], 'r').readlines())
+    peaks_info['velcropercentage'] = peaks_info["velcro"] / peaks_info["totalpeak"]
+
+    result_dict = {"stat": {}, "input": input, "output": output, "param": param}
+    result_dict["stat"] = peaks_info
+    with open(output["json"], "w") as f:
+        json.dump(result_dict, f, indent=4)
+
+
+def stat_dhs(input={"macs2_peaks_xls": "", "dhs_peaks": ""}, output={"json": ""},
+             param={}):
+    peaks_info = _peaks_parse(input["macs2_peaks_xls"])
+    peaks_info["dhs"] = len(open(input["dhs_peaks"], 'r').readlines())
+    peaks_info['dhspercentage'] = peaks_info["dhs"] / peaks_info["totalpeak"]
+
+    result_dict = {"stat": {}, "input": input, "output": output, "param": param}
+    result_dict["stat"] = peaks_info
+    with open(output["json"], "w") as f:
+        json.dump(result_dict, f, indent=4)
+
+

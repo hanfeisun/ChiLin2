@@ -57,6 +57,14 @@ class ChiLinConfig(object):
         return os.path.join(self.target_dir, self.id)
 
     @property
+    def json_prefix(self):
+        return os.path.join(self.category("json"), self.id)
+
+    @property
+    def latex_prefix(self):
+        return os.path.join(self.category("latex"), self.id)
+
+    @property
     def treatment_pairs(self):
         return list(zip(self.treatment_raws, self.treatment_targets))
 
@@ -117,5 +125,12 @@ class ChiLinConfig(object):
     @property
     def sample_bases(self):
         return [self._base(i) for i in self.sample_targets]
+
+    def category(self, category_name):
+        target_path = os.path.join(self.target_dir, category_name)
+        if not os.path.exists(target_path):
+            os.makedirs(target_path)
+        return target_path
+
 
 
