@@ -10,7 +10,7 @@ def underline_to_space(x):
     return x
 
 
-def _qc_bowtie_summary_parse(input=""):
+def _bowtie_summary_parse(input=""):
     summary_content = open(input).read()
     print(summary_content)
     print("_" * 100)
@@ -40,7 +40,7 @@ def stat_bowtie(input={"bowtie_summaries": [], "db":"", "template": ""},
                         "mappable_rate": []}
 
     for summary, sam in zip(input["bowtie_summaries"], param["sams"]):
-        json_dict["stat"][sam] = _qc_bowtie_summary_parse(summary)
+        json_dict["stat"][sam] = _bowtie_summary_parse(summary)
 
     mappable_rates = [json_dict["stat"][i]["mappable_rate"] for i in json_dict["stat"]]
 

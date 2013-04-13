@@ -15,7 +15,7 @@ from pkg_resources import resource_filename
 from chilin2.config import ChiLinConfig
 from chilin2.function_template.qc_bowtie import stat_bowtie, latex_bowtie
 from chilin2.function_template.qc_ceas import stat_ceas, latex_ceas
-from chilin2.function_template.qc_contamination import write_random_records, library_summary
+from chilin2.function_template.qc_contamination import fastq_sampling, stat_contamination, latex_contamination
 from chilin2.function_template.qc_fastqc import stat_fastqc, latex_fastqc
 from chilin2.function_template.qc_macs2 import stat_macs2, stat_velcro, stat_dhs, stat_macs2_on_sample, latex_macs2, latex_macs2_on_sample
 from chilin2.function_template.qc_mdseqpos import stat_seqpos, latex_seqpos
@@ -102,48 +102,51 @@ def _groom_sequencing_files(workflow, conf):
             print(raw, " is neither fastq nor bam file. Skip grooming.")
             not_groomed.append([raw, target])
 
-def prepare_library_contamination(workflow, conf):
-    """
-    :param workflow: main stream workflow
-    :param conf: conf parsed from config
-    :return: none
-    estimate library contamination ratios
-    """
+def _lib_contamination(workflow, conf):
     ## bowtie mapping back to
     for target in conf.sample_targets:
-        random_reads = attach_back(workflow,
-            PythonCommand(write_random_records,
+        attach_back(workflow,
+            PythonCommand(fastq_sampling,
             input = {"fastq": target + ".fastq"},
             output = {"fastq_sample": target + ".fastq.subset"},
-            param = {"random_number": "100000"}))     ## use 100kb random reads
+            param = {"random_number": 100000}))     ## use 100kb random reads
 
         for species in dict(conf.items("contaminate_genomes")):
             attach_back(workflow,
                 ShellCommand(
                 "{tool} -p {param[threads]} -S -m {param[max_align]} \
                 {param[genome_index]} {input[fastq]} {output[sam]} 2> {output[bowtie_summary]}",
-                input={"genome_dir": os.path.dirname(conf.get_path("lib", "genome_index")),
+                input={"genome_dir": os.path.dirname(conf.get_path("contaminate", species)),
                        "fastq": target + ".fastq.subset"},
                 output={"sam": target + ".sam.subset",
-                        "bowtie_summary": target + species + "_subset_bowtie_summary.txt"},
+                        "bowtie_summary": target + species + "_contam_summary.txt"},
                 tool="bowtie",
                 param={"threads": 4,
                        "max_align": 1,
                        "genome_index": conf.get_path("contaminate_genomes", species)}))
 
-def prepare_library_contaminationTex(workflow, conf):
-    all_contaminate_files = []
+    all_species = [i for i, _ in conf.items("contaminate_genomes")]
+    bowtie_summaries = []
     for target in conf.sample_targets:
-        all_contaminate_files.append([ target + species + "_subset_bowtie_summary.txt" for species in dict(conf.items("contaminate_genomes")) ])
-    Tex_step = attach_back(workflow,
-        PythonCommand(library_summary,
-             input = {"latex_template": latex_template},
-             output = {"latex_section": conf.prefix + "_library_contamination_summary"},
-             param = {"samples": conf.sample_bases,
-                      "bowtie_summary": all_contaminate_files,
-                      "id": conf.id,
-                      "species": [os.path.basename(conf.get("contaminate_genomes", species)) for species in dict(conf.items("contaminate_genomes"))] }))
-    return Tex_step.output["latex_section"]
+        bowtie_summaries.append([ target + species + "_conta_summary.txt" for species in all_species])
+    attach_back(workflow,
+        PythonCommand(stat_contamination,
+            input = {"bowtie_summaries": bowtie_summaries},
+            output = {"json": conf.json_prefix + "_contam.json"},
+            param = {"samples": conf.sample_bases,
+                     "id": conf.id,
+                     "species": all_species}))
+
+def _lib_contamination_latex(workflow, conf):
+    attach_back(workflow,
+        PythonCommand(latex_contamination,
+             input = {"template": latex_template,
+                      "json": conf.json_prefix + "_contam.json"},
+             output = {"latex": conf.prefix + "_contam.latex"}))
+
+
+
+
 
 def _raw_QC(workflow, conf):
     for target in conf.sample_targets:
@@ -792,46 +795,47 @@ def create_workflow(args, conf, step_checker : StepChecker):
     if need_run(2):
         bld.build(_raw_QC)
         bld.build(_raw_QC_latex)
-        #TODO: merge
-        bld.build(prepare_library_contamination)
-        bld.build_LaTex(prepare_library_contaminationTex)
 
     if need_run(3):
+        bld.build(_lib_contamination)
+        bld.build(_lib_contamination_latex)
+
+    if need_run(4):
         bld.build(_bowtie)
         bld.build(_bowtie_latex)
 
-    if need_run(4):
+    if need_run(5):
         bld.build(_macs2)
         bld.build(_macs2_latex)
 
-    if need_run(5):
+    if need_run(6):
         bld.build(_macs2_on_sample)
         bld.build(_macs2_on_sample_latex)
 
     if have_treat_reps:
-        if need_run(6):
+        if need_run(7):
             bld.build(_macs2_venn)
             bld.build(_macs2_venn_latex)
 
-        if need_run(7):
+        if need_run(8):
             bld.build(_macs2_cor)
             bld.build(_macs2_cor_latex)
 
-    if has_dhs and need_run(8):
+    if has_dhs and need_run(9):
         bld.build(_DHS_overlap)
 
-    if has_velcro and need_run(9):
+    if has_velcro and need_run(10):
         bld.build(_velcro_overlap)
 
-    if need_run(10):
+    if need_run(11):
         bld.build(_ceas)
         bld.build(_ceas_latex)
 
-    if need_run(11):
+    if need_run(12):
         bld.build(_conservation)
         bld.build(_conservation_latex)
 
-    if need_run(12):
+    if need_run(13):
         bld.build(_seqpos)
         bld.build(_seqpos_latex)
 
