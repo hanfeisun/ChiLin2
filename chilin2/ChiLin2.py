@@ -17,7 +17,7 @@ from chilin2.function_template.qc_bowtie import stat_bowtie, latex_bowtie
 from chilin2.function_template.qc_ceas import stat_ceas, latex_ceas
 from chilin2.function_template.qc_contamination import fastq_sampling, stat_contamination, latex_contamination
 from chilin2.function_template.qc_fastqc import stat_fastqc, latex_fastqc
-from chilin2.function_template.qc_macs2 import stat_macs2, stat_velcro, stat_dhs, stat_macs2_on_sample, latex_macs2, latex_macs2_on_sample
+from chilin2.function_template.qc_macs2 import stat_macs2, stat_velcro, stat_dhs, stat_macs2_on_treats, latex_macs2, latex_macs2_on_sample
 from chilin2.function_template.qc_mdseqpos import stat_seqpos, latex_seqpos
 from chilin2.function_template.qc_conservation import stat_conservation, latex_conservation
 from chilin2.function_template.qc_venn import stat_venn, stat_cor, latex_venn, latex_cor
@@ -102,50 +102,49 @@ def _groom_sequencing_files(workflow, conf):
             print(raw, " is neither fastq nor bam file. Skip grooming.")
             not_groomed.append([raw, target])
 
+
 def _lib_contamination(workflow, conf):
     ## bowtie mapping back to
     for target in conf.sample_targets:
         attach_back(workflow,
             PythonCommand(fastq_sampling,
-            input = {"fastq": target + ".fastq"},
-            output = {"fastq_sample": target + ".fastq.subset"},
-            param = {"random_number": 100000}))     ## use 100kb random reads
+                input={"fastq": target + ".fastq"},
+                output={"fastq_sample": target + ".fastq.subset"},
+                param={"random_number": 100000}))     ## use 100kb random reads
 
         for species in dict(conf.items("contaminate_genomes")):
             attach_back(workflow,
                 ShellCommand(
-                "{tool} -p {param[threads]} -S -m {param[max_align]} \
-                {param[genome_index]} {input[fastq]} {output[sam]} 2> {output[bowtie_summary]}",
-                input={"genome_dir": os.path.dirname(conf.get_path("contaminate", species)),
-                       "fastq": target + ".fastq.subset"},
-                output={"sam": target + ".sam.subset",
-                        "bowtie_summary": target + species + "_contam_summary.txt"},
-                tool="bowtie",
-                param={"threads": 4,
-                       "max_align": 1,
-                       "genome_index": conf.get_path("contaminate_genomes", species)}))
+                    "{tool} -p {param[threads]} -S -m {param[max_align]} \
+                    {param[genome_index]} {input[fastq]} {output[sam]} 2> {output[bowtie_summary]}",
+                    input={"genome_dir": os.path.dirname(conf.get_path("contaminate", species)),
+                           "fastq": target + ".fastq.subset"},
+                    output={"sam": target + ".sam.subset",
+                            "bowtie_summary": target + species + "_contam_summary.txt"},
+                    tool="bowtie",
+                    param={"threads": 4,
+                           "max_align": 1,
+                           "genome_index": conf.get_path("contaminate_genomes", species)}))
 
     all_species = [i for i, _ in conf.items("contaminate_genomes")]
     bowtie_summaries = []
     for target in conf.sample_targets:
-        bowtie_summaries.append([ target + species + "_conta_summary.txt" for species in all_species])
+        bowtie_summaries.append([target + species + "_conta_summary.txt" for species in all_species])
     attach_back(workflow,
         PythonCommand(stat_contamination,
-            input = {"bowtie_summaries": bowtie_summaries},
-            output = {"json": conf.json_prefix + "_contam.json"},
-            param = {"samples": conf.sample_bases,
-                     "id": conf.id,
-                     "species": all_species}))
+            input={"bowtie_summaries": bowtie_summaries},
+            output={"json": conf.json_prefix + "_contam.json"},
+            param={"samples": conf.sample_bases,
+                   "id": conf.id,
+                   "species": all_species}))
+
 
 def _lib_contamination_latex(workflow, conf):
     attach_back(workflow,
         PythonCommand(latex_contamination,
-             input = {"template": latex_template,
-                      "json": conf.json_prefix + "_contam.json"},
-             output = {"latex": conf.prefix + "_contam.latex"}))
-
-
-
+            input={"template": latex_template,
+                   "json": conf.json_prefix + "_contam.json"},
+            output={"latex": conf.prefix + "_contam.latex"}))
 
 
 def _raw_QC(workflow, conf):
@@ -402,7 +401,7 @@ def _macs2_on_sample(workflow, conf):
 
     attach_back(workflow,
         PythonCommand(
-            stat_macs2_on_sample,
+            stat_macs2_on_treats,
             input={"all_peak_xls": [target + "_peaks.xls" for target in conf.treatment_targets],
                    "db": ChiLinQC_db,
                    "template": r_template},
@@ -687,10 +686,6 @@ def _seqpos(workflow, conf):
             output={"json": conf.json_prefix + "_seqpos.json"},
             param={"z_score_cutoff": -15}))
 
-def prepare_summary_plain(workflow, conf):
-    """summary of all criteria by plain text"""
-
-    return
 
 def _seqpos_latex(workflow, conf):
     attach_back(workflow,
@@ -708,37 +703,51 @@ def _ending_latex(workflow, conf):
             input={"template": latex_template},
             output={"latex": conf.latex_prefix + "_ending.latex"}))
 
+
 def latex_summary(workflow, conf):
     """summary of all criteria by plain text"""
     summary_table = []
-    if os.path.exists(conf.json_prefix + "_contam.json"):
-        contamin = json_load(conf.json_prefix + "_contam.json")['stat']
-    if os.path.exists(conf.json_prefix + "_fastqc.json"):
+
+    exist = os.path.exists
+    if exist(conf.json_prefix + "_fastqc.json"):
         fastqc = json_load(conf.json_prefix + "_fastqc.json")['stat']
-    if os.path.exists(conf.json_prefix + "_bowtie.json"):
+        for k, v in fastqc.items():
+            summary_table.append(["FastQC", k, v["median"], v["cutoff"], v["judge"]])
+
+    if exist(conf.json_prefix + "_bowtie.json"):
         bowtie = json_load(conf.json_prefix + "_bowtie.json")['stat']
+        for k, v in bowtie.items():
+            summary_table.append(["Unique mappable reads", k, v["mappable_reads"], v["cutoff"], v["judge"]])
 
-    if os.path.exists(conf.json_prefix + "_macs2_on_sample.json"):
-        macs2_sample = json_load(conf.json_prefix + "_macs2_on_sample.json")['stat']
-    if os.path.exists(conf.json_prefix + "_macs2.json"):
+    if exist(conf.json_prefix + "_macs2.json"):
         macs2 = json_load(conf.json_prefix + "_macs2.json")['stat']
+        summary_table.append("High confident peaks", conf.id, macs2["high_conf_peaks"], macs2["cutoff"]["high_conf_peaks"],
+                    macs2["judge"]["high_conf_peaks"])
 
-    if os.path.exists(conf.json_prefix + "_venn.json"):
-        venn = json_load(conf.json_prefix + "_venn.json")['stat']
-    if os.path.exists(conf.json_prefix + "_dhs.json"):
+    if exist(conf.json_prefix + "_macs2_on_sample.json"):
+        macs2_sample = json_load(conf.json_prefix + "_macs2_on_sample.json")['stat']
+        for k, v in macs2_sample.items():
+            summary_table.append(["Unique location rate", k, v["unic_loc_rate"], v["cutoff"]["unic_loc_rate"],
+                                  v["judge"]["unic_loc_rate"]])
+            summary_table.append(["Unique location", k, v["unic_loc"], v["cutoff"]["unic_loc"],
+                v["judge"]["unic_loc"]])
+
+    if exist(conf.json_prefix + "_dhs.json"):
         dhs = json_load(conf.json_prefix + "_dhs.json")['stat']
-    if os.path.exists(conf.json_prefix + "_cor.json"):
-        cor = json_load(conf.json_prefix + "_cor.json")['stat']
-    if os.path.exists(conf.json_prefix + "_velcro.json"):
-        velcro = json_load(conf.json_prefix + "_velcro.json")['stat']
+        summary_table.append(["DHS ratio", conf.id, dhs["dhspercentage"], dhs["cutoff"], dhs["judge"]])
 
-    if os.path.exists(conf.json_prefix + "_ceas.json"):
-        ceas = json_load(conf.json_prefix + "_ceas.json")['stat']
-    if os.path.exists(conf.json_prefix + "_seqpos.json"):
-        seqpos = json_load(conf.json_prefix + "_seqpos.json")['stat']
-    if os.path.exists(conf.json_prefix + "_conserv.json"):
+    if exist(conf.json_prefix + "_cor.json"):
+        cor = json_load(conf.json_prefix + "_cor.json")['stat']
+        summary_table.append(["Replicates Correlation", conf.id, cor["min_cor"], cor["cutoff"], cor["judge"]])
+    if exist(conf.json_prefix + "_velcro.json"):
+        velcro = json_load(conf.json_prefix + "_velcro.json")['stat']
+        summary_table.append(["non Velro ratio", conf.id, velcro["nonvelcropercentage"], velcro["cutoff"], velcro["judge"]])
+
+    if exist(conf.json_prefix + "_conserv.json"):
         conserv = json_load(conf.json_prefix + "_conserv.json")['stat']
+        summary_table.append(["Conservation QC", conf.id, "", "",conserv["judge"]])
     return
+
 
 def prepare_clean_up(workflow, conf):
     """
@@ -768,6 +777,7 @@ def prepare_clean_up(workflow, conf):
             continue
         else:
             os.system("rm -r %s" % f)
+
 
 class StepChecker:
     def __init__(self, start, end, skips):

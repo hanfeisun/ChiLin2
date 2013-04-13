@@ -19,7 +19,7 @@ def stat_cor(input={"correlation_R":"", "cor_pdf": "", "venn": "", },
             cmd = 'R --slave --vanilla <<< "cor(%s, %s)"'
             cmd_result = subprocess.check_output(cmd % (signal_list[i], signal_list[j]))
             correlation_value_list.append(float(re.findall("[1] (.*)")[0]))
-    correlation_value_list = [0.6]
+
     min_correlation = min(correlation_value_list)
 
 
@@ -31,6 +31,8 @@ def stat_cor(input={"correlation_R":"", "cor_pdf": "", "venn": "", },
 
     result_dict = {"stat": {}, "input": input, "output": output, "param": param}
     result_dict["stat"]["judge"] = judge
+    result_dict["stat"]["cutoff"] = 0.6
+    result_dict["stat"]["min_cor"] = min_correlation
 
     json_dump(result_dict)
 
