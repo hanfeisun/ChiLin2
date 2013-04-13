@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
+from glob import glob
 
 import os
+import random
+import subprocess
 import sys
 import re
 import argparse
@@ -98,6 +101,48 @@ def _groom_sequencing_files(workflow, conf):
             print(raw, " is neither fastq nor bam file. Skip grooming.")
             not_groomed.append([raw, target])
 
+def prepare_library_contamination(workflow, conf):
+    """
+    :param workflow: main stream workflow
+    :param conf: conf parsed from config
+    :return: none
+    estimate library contamination ratios
+    """
+    ## bowtie mapping back to
+    for target in conf.sample_targets:
+        random_reads = attach_back(workflow,
+            PythonCommand(write_random_records,
+            input = {"fastq": target + ".fastq"},
+            output = {"fastq_sample": target + ".fastq.subset"},
+            param = {"random_number": "100000"}))     ## use 100kb random reads
+
+        for species in dict(conf.items("contaminate_genomes")):
+            attach_back(workflow,
+                ShellCommand(
+                "{tool} -p {param[threads]} -S -m {param[max_align]} \
+                {param[genome_index]} {input[fastq]} {output[sam]} 2> {output[bowtie_summary]}",
+                input={"genome_dir": os.path.dirname(conf.get_path("lib", "genome_index")),
+                       "fastq": target + ".fastq.subset"},
+                output={"sam": target + ".sam.subset",
+                        "bowtie_summary": target + species + "_subset_bowtie_summary.txt"},
+                tool="bowtie",
+                param={"threads": 4,
+                       "max_align": 1,
+                       "genome_index": conf.get_path("contaminate_genomes", species)}))
+
+def prepare_library_contaminationTex(workflow, conf):
+    all_contaminate_files = []
+    for target in conf.sample_targets:
+        all_contaminate_files.append([ target + species + "_subset_bowtie_summary.txt" for species in dict(conf.items("contaminate_genomes")) ])
+    Tex_step = attach_back(workflow,
+        PythonCommand(library_summary,
+             input = {"latex_template": Latex_summary_report_template},
+             output = {"latex_section": conf.prefix + "_library_contamination_summary"},
+             param = {"samples": conf.sample_bases,
+                      "bowtie_summary": all_contaminate_files,
+                      "id": conf.id,
+                      "species": [os.path.basename(conf.get("contaminate_genomes", species)) for species in dict(conf.items("contaminate_genomes"))] }))
+    return Tex_step.output["latex_section"]
 
 def _raw_QC(workflow, conf):
     for target in conf.sample_targets:
@@ -638,6 +683,10 @@ def _seqpos(workflow, conf):
             output={"json": conf.json_prefix + "_seqpos.json"},
             param={"z_score_cutoff": -15}))
 
+def prepare_summary_plain(workflow, conf):
+    """summary of all criteria by plain text"""
+
+    return
 
 def _seqpos_latex(workflow, conf):
     attach_back(workflow,
@@ -655,6 +704,34 @@ def _ending_latex(workflow, conf):
             input={"template": latex_template},
             output={"latex": conf.latex_prefix + "_ending.latex"}))
 
+def prepare_clean_up(workflow, conf):
+    """
+    package all the necessary results and delete temporary files
+    """
+    bams = glob('*.bam')
+    xls = glob('*.xls')
+    summits = glob('*_summits.bed')
+    peaks = glob('*_peaks.bed')
+    bw = glob('*.bw')
+    png = glob('*.png')
+    cor = glob('*cor*')
+    pdf = glob('*_ceas.pdf')
+    r = glob('*_ceas.R')
+    m = glob('*.zip')
+    su = glob('dataset*.txt')
+    qc = glob('*.tex')
+    qcp = glob('*QC.pdf')
+    fls = [bams, xls, summits, peaks, bw, png, pdf, r, m, cor, su, qc, qcp]
+    folder = conf.target_dir + '/dataset' + conf.id
+    os.system('mkdir %s' % folder)
+    for fs in fls:
+        os.system('cp %s %s' % (' '.join(fs), folder))
+    preservation = os.listdir(".")
+    for f in preservation:
+        if f.startswith("dataset") and os.path.isdir(f):
+            continue
+        else:
+            os.system("rm -r %s" % f)
 
 class StepChecker:
     def __init__(self, start, end, skips):
@@ -714,7 +791,11 @@ def create_workflow(args, conf, step_checker : StepChecker):
     if need_run(2):
         bld.build(_raw_QC)
         bld.build(_raw_QC_latex)
+        #TODO: merge
+        bld.build(prepare_library_contamination)
+        bld.build_LaTex(prepare_library_contaminationTex)
 
+        bld.build(prepare_raw_QC)
     if need_run(3):
         bld.build(_bowtie)
         bld.build(_bowtie_latex)
@@ -757,8 +838,7 @@ def create_workflow(args, conf, step_checker : StepChecker):
     bld.build(_ending_latex)
 
     if args.clean:
-        print("test for clean")
-        #clean_up()
+        bld.build(prepare_clean_up)
     return bld.workflow
 
 

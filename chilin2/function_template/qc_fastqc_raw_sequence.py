@@ -93,7 +93,6 @@ def latex_fastqc(input, output, param):
         template=input["template"],
         param={"section_name": "sequence_quality",
                "path": json_dict["output"]["pdf"],
-               "qc_report_begin": True,
                "fastqc_table": fastqc_summary,
                "fastqc_graph": json_dict["output"]["pdf"],
                'prefix_dataset_id': stat.keys(),
