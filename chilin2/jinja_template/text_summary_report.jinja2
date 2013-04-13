@@ -69,7 +69,16 @@ usable_percentage(unique/total reads) = \VAR{ sam.percentage }
 %- endif
 
 %- if section_name == "summary"
-[Data Summary]
-library_contamination_ratio =
-unique_mappable_ratio =
+[summary]
+\BLOCK{ for summary in summaries }
+library_contamination_score = \VAR{ summary.lc }
+non_redundant_ratio = \VAR{ summary.non_redundant}
+unique_mappable_reads = \VAR{ summary.ureads }
+unique_mappable_location = \VAR{ summary.uloc }
+replicates_correlation = \VAR{ summary.cor }
+high_confident_peaks = \VAR{ summary.confpeaks }
+dhs_overlap = \VAR{ summary.dhs }
+non_velcro_overlap = \VAR{ summary.nonvelcro }
+conservation = \VAR{ summary.conservation }
+\BLOCK{ endfor }
 %- endif

@@ -115,43 +115,32 @@ def prepare_library_contamination(workflow, conf):
             output = {"fastq_sample": target + ".fastq.subset"},
             param = {"random_number": "100000"}))     ## use 100kb random reads
 
-        bowtie_self = attach_back(workflow,
-            ShellCommand(
+        for species in dict(conf.items("contaminate_genomes")):
+            attach_back(workflow,
+                ShellCommand(
                 "{tool} -p {param[threads]} -S -m {param[max_align]} \
                 {param[genome_index]} {input[fastq]} {output[sam]} 2> {output[bowtie_summary]}",
                 input={"genome_dir": os.path.dirname(conf.get_path("lib", "genome_index")),
                        "fastq": target + ".fastq.subset"},
                 output={"sam": target + ".sam.subset",
-                        "bowtie_summary": target + "_subset_bowtie_summary.txt"},
+                        "bowtie_summary": target + species + "_subset_bowtie_summary.txt"},
                 tool="bowtie",
                 param={"threads": 4,
                        "max_align": 1,
-                       "genome_index": conf.get_path("lib", "genome_index")}))
-
-        bowtie_other1 = bowtie_self.clone
-        bowtie_other1.param.update({"genome_index": conf.get_path("lib", "other_index1")})
-        bowtie_other1.output.update({"bowtie_summary": target + "_other1_subset_bowtie_summary.txt"})
-
-        bowtie_other2 = bowtie_self.clone
-        bowtie_other2.param.update({"genome_index": conf.get_path("lib", "other_index2")})
-        bowtie_other2.output.update({"bowtie_summary": target + "_other2_subset_bowtie_summary.txt"})
-
-        attach_back(workflow, bowtie_other1)
-        attach_back(workflow, bowtie_other2)
+                       "genome_index": conf.get_path("contaminate_genomes", species)}))
 
 def prepare_library_contaminationTex(workflow, conf):
+    all_contaminate_files = []
+    for target in conf.sample_targets:
+        all_contaminate_files.append([ target + species + "_subset_bowtie_summary.txt" for species in dict(conf.items("contaminate_genomes")) ])
     Tex_step = attach_back(workflow,
-         PythonCommand(library_summary,
-             input = {"latex_template": Latex_summary_report_template,
-                      "bowtie_summary": [ target + "_subset_bowtie_summary.txt" for target in conf.sample_targets ],
-                      "other1_summary": [ target + "_other1_subset_bowtie_summary.txt" for target in conf.sample_targets ],
-                      "other2_summary": [ target + "_other2_subset_bowtie_summary.txt" for target in conf.sample_targets ]},
+        PythonCommand(library_summary,
+             input = {"latex_template": Latex_summary_report_template},
              output = {"latex_section": conf.prefix + "_library_contamination_summary"},
              param = {"samples": conf.sample_bases,
+                      "bowtie_summary": all_contaminate_files,
                       "id": conf.id,
-                      "species": os.path.basename(conf.get("lib", "genome_index")),
-                      "other1": os.path.basename(conf.get("lib", "other_index1")),
-                      "other2": os.path.basename(conf.get("lib", "other_index2"))}))
+                      "species": [os.path.basename(conf.get("contaminate_genomes", species)) for species in dict(conf.items("contaminate_genomes"))] }))
     return Tex_step.output["latex_section"]
 
 def prepare_raw_QC(workflow, conf):

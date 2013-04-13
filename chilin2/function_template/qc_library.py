@@ -27,30 +27,28 @@ def write_random_records(input = {"fastq": ""}, output = {"fastq_sample": ""}, p
     print("wrote to %s" % (output["fastq_sample"]))
 
 ## summary of library contamination
-def library_summary(input = {"latex_template": "", "bowtie_summary": "", "other1_bowtie_summary": "", "other2_bowtie_summary": ""},
-                    output = {"latex_section": ""}, param = {"samples": "","species": "", "other1": "", "other2": ""}):
+def library_summary(input = {"latex_template": ""},
+                    output = {"latex_section": ""}, param = {"samples": "", "bowtie_summaries": "", "species": "", "id": ""}):
 
-    bowtie_summaries = {param["species"]: [],
-                        param["other1"]: [],
-                        param["other2"]: []}
-
-    for a_summary in input["bowtie_summary"]:
-        parsed_summary = _qc_bowtie_summary_parse(a_summary)
-        bowtie_summaries[param["species"]].append(parsed_summary["mappable_rate"])
-    for a_summary in input["other1_summary"]:
-        parsed_summary = _qc_bowtie_summary_parse(a_summary)
-        bowtie_summaries[param["other1"]].append(parsed_summary["mappable_rate"])
-    for a_summary in input["other2_summary"]:
-        parsed_summary = _qc_bowtie_summary_parse(a_summary)
-        bowtie_summaries[param["other2"]].append(parsed_summary["mappable_rate"])
-        # basic mappable table, two layer list
+    library_contamination = [["sample_name"] + param["species"]]
 
     # COL 1 samples
-    # COL 2 human mappable ratio (suppose correct species is human)
-    # COL 3 mouse mappable ratio
-    # COL 4 rat mappable ratio
-    library_contamination = [["sample_name", param["species"], param["other1"], param["other2"]]]
-    library_contamination = zip(map(underline_to_space, param["samples"]), bowtie_summaries[param["species"]], bowtie_summaries[param["other1"]], bowtie_summaries[param["other2"]])
+    # COL 2 species1 mappable ratio (suppose correct species is human)
+    # COL 3 species2 mappable ratio
+    # COL 4 species3 mappable ratio
+    for a_summary, s in zip(param["bowtie_summary"], map(underline_to_space, param["samples"])):
+        ## each bowtie_summary has several species information
+        bowtie_summaries = []
+
+        print("aaaa", a_summary)
+        for i in a_summary:
+            print(i)
+            ## species 1, species2, species3
+            parsed_summary = _qc_bowtie_summary_parse(i)
+            bowtie_summaries.append(s)
+            bowtie_summaries.append(parsed_summary["mappable_rate"])
+        library_contamination.append(bowtie_summaries)
+
     library_quality_latex = JinjaTemplateCommand(
         name="library contamination",
         template=input["latex_template"],
