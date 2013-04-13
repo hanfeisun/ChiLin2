@@ -10,6 +10,6 @@ setup(
     author_email='',
     description='',
     scripts = ["chilin2/ChiLin2.py"],
-    requires=["samflow"],
+    requires=["samflow", "jinja2"],
     package_data = {"chilin2" : ["db/ChiLinQC.db", "jinja_template/*.jinja2","db/*.txt"]}
 )
