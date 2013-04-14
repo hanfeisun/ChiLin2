@@ -1,7 +1,7 @@
 import json
 import re
 import sqlite3
-from chilin2.helpers import JinjaTemplateCommand, template_dump, r_exec, json_dump, json_load
+from chilin2.helpers import JinjaTemplateCommand, template_dump, r_exec, json_dump, json_load, underline_to_space
 
 def _python_fastqc_parse(input, output=None, param=None):
     data = open(input).readlines()
@@ -62,11 +62,12 @@ def stat_fastqc(input={"db": "", "fastqc_summaries": [], "template": ""},
     qc_db.execute("SELECT median_quality FROM fastqc_info")
     history_data = [float(i[0]) for i in qc_db.fetchall()]
 
+
     fastqc_dist_r = JinjaTemplateCommand(
         template=input["template"],
         param={'historic_data': history_data,
                'current_data': quality_medians,
-               'ids': param["ids"],
+               'ids': [underline_to_space(i) for i in param["ids"]],
                'cutoff': 25,
                'main': 'Sequence Quality Score Cumulative Percentage',
                'xlab': 'sequence quality score',
@@ -89,7 +90,7 @@ def latex_fastqc(input, output, param):
     fastqc_summary = []
     stat = json_dict["stat"]
     for sample in stat:
-        fastqc_summary.append([sample, stat[sample]["sequence_length"], stat[sample]["median"]])
+        fastqc_summary.append([underline_to_space(sample), stat[sample]["sequence_length"], stat[sample]["median"]])
 
     latex = JinjaTemplateCommand(
         template=input["template"],
@@ -97,7 +98,6 @@ def latex_fastqc(input, output, param):
                "path": json_dict["output"]["pdf"],
                "fastqc_table": fastqc_summary,
                "fastqc_graph": json_dict["output"]["pdf"],
-               'prefix_dataset_id': stat.keys(),
-
+               'prefix_dataset_id': [ underline_to_space(i) for i in stat.keys() ],
                "render_dump": output["latex"]})
     template_dump(latex)

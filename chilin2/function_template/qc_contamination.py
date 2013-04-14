@@ -1,8 +1,8 @@
 import json
 import random
 import sys
-from chilin2.function_template.qc_bowtie import _bowtie_summary_parse, underline_to_space
-from chilin2.helpers import JinjaTemplateCommand, template_dump, json_load
+from chilin2.function_template.qc_bowtie import _bowtie_summary_parse
+from chilin2.helpers import JinjaTemplateCommand, template_dump, json_load, underline_to_space
 
 __author__ = 'qinqianhappy'
 
@@ -65,7 +65,6 @@ def latex_contamination(input, output, param):
         name="library contamination",
         template=input["template"],
         param={"section_name": "library_contamination",
-               "qc_report_begin": True,
                "library_contamination": json_dict["stat"],
                'prefix_dataset_id': json_dict["param"]['id'],
                "render_dump": output["latex"]

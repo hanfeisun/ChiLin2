@@ -1,13 +1,7 @@
 import json
 import re
 import sqlite3
-from chilin2.helpers import JinjaTemplateCommand, template_dump, r_exec, json_load
-
-
-def underline_to_space(x):
-    if type(x) == str:
-        return x.replace("_", " ")
-    return x
+from chilin2.helpers import JinjaTemplateCommand, template_dump, r_exec, json_load, underline_to_space
 
 
 def _bowtie_summary_parse(input=""):

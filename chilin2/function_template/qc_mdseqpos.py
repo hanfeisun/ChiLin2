@@ -16,7 +16,7 @@ def _extract_traverse_tree(tree):
     return result_list
 
 
-def stat_seqpos(input = {"template": "", "seqpos": ""}, output={"latex_section": ""}, param = {"z_score_cutoff":-15}):
+def stat_seqpos(input = {"template": "", "seqpos": ""}, output={"latex_section": ""}, param = {"prefix": "", "z_score_cutoff":-15}):
     """parrase mdsepose html file"""
     z_score_cutoff = param["z_score_cutoff"]
     seqpos_html_content = open(input['seqpos']).read()
@@ -55,6 +55,9 @@ def stat_seqpos(input = {"template": "", "seqpos": ""}, output={"latex_section":
     if satisfied_count < 5:
         satisfied_motif_list = all_motif_list[:5]
 
+    for n, _ in enumerate(satisfied_motif_list):
+        satisfied_motif_list[n]["logoImg"] = param["prefix"] + satisfied_motif_list[n]["logoImg"]
+        print(satisfied_motif_list)
     result_dict = {"stat": {}, "input": input, "output": output, "param": param}
     result_dict["stat"]["satisfied_motifs"] = satisfied_motif_list
     with open(output["json"], "w") as f:

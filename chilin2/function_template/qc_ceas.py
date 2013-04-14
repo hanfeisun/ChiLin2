@@ -34,9 +34,8 @@ def stat_ceas(input={"macs2_peaks_xls": "", "ceas_rscript": ""},
         re.DOTALL)[0] # return three figures for metagene distribution
 
     pie_chart_r_codes = re.findall(
-        "(" +
         re.escape("par(mfcol=c(2, 2),mar=c(3, 3, 4, 2.7999999999999998),oma=c(4, 2, 4, 2))") +
-        ".*)" +
+        "(.*)" +
         re.escape("# ChIP regions over the genome"), # stop here
 
         ceas_rscript_content,
@@ -45,7 +44,7 @@ def stat_ceas(input={"macs2_peaks_xls": "", "ceas_rscript": ""},
     with open(output["R"], 'w') as r_file:
         # R codes for Peak height distribution & Pie chart
         r_file.write("pdf('%s',height=11.5,width=8.5)\n" % output["peakheight_and_pie_pdf"])
-        r_file.write('nf <- layout(matrix(c(1,1,2,3,4,5), 3, 2, byrow=TRUE),respect=TRUE)\n')
+        r_file.write('nf <- layout(matrix(c(1,1,2,4,3,5), 3, 2, byrow=TRUE),respect=TRUE)\n')
         r_file.write('peaks_fc <- c(%s)\n' % foldchange_string)
         r_file.write('fn <- ecdf(peaks_fc)\n')
         r_file.write('density <- fn(peaks_fc)\n')

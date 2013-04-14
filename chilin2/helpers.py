@@ -61,7 +61,16 @@ def json_load(json_file):
         json_dict = json.load(f)
     return json_dict
 
+def latex_start(input = {"template": ""}, output = {"latex": ""}, param = {"id": ""}):
+    end_latex = JinjaTemplateCommand(
+        name = "end of latex document",
+        template = input["template"],
+        param = {"section_name": "begin",
+                 "prefix_dataset_id": param["id"],
+                 "render_dump": output["latex"]
+        })
 
+    template_dump(end_latex)
 def latex_end(input = {"template": ""}, output = {"latex": ""}, param = {}):
     end_latex = JinjaTemplateCommand(
         name = "end of latex document",
@@ -71,3 +80,9 @@ def latex_end(input = {"template": ""}, output = {"latex": ""}, param = {}):
                  })
 
     template_dump(end_latex)
+
+
+def underline_to_space(x):
+    if type(x) == str:
+        return x.replace("_", " ")
+    return x

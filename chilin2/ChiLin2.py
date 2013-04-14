@@ -20,7 +20,7 @@ from chilin2.function_template.qc_mdseqpos import stat_seqpos, latex_seqpos
 from chilin2.function_template.qc_conservation import stat_conservation, latex_conservation
 from chilin2.function_template.qc_summary_table import latex_summary_table
 from chilin2.function_template.qc_venn import stat_venn, stat_cor, latex_venn, latex_cor
-from chilin2.helpers import latex_end
+from chilin2.helpers import latex_end, latex_start
 
 
 ChiLinQC_db = resource_filename("chilin2", "db/ChiLinQC.db")
@@ -683,7 +683,7 @@ def _seqpos(workflow, conf):
             stat_seqpos,
             input={"seqpos": conf.prefix + "_seqpos/" + "mdseqpos_out.html"},
             output={"json": conf.json_prefix + "_seqpos.json"},
-            param={"z_score_cutoff": -15}))
+            param={"prefix": conf.prefix + "_seqpos/", "z_score_cutoff": -15}))
 
 
 def _seqpos_latex(workflow, conf):
@@ -703,6 +703,13 @@ def _summary_table_latex(workflow, conf):
             output={"latex": conf.latex_prefix + "_summary_table.latex"},
             param={"conf": conf}))
 
+def _begin_latex(workflow, conf):
+    attach_back(workflow,
+        PythonCommand(
+            latex_start,
+            input={"template": latex_template},
+            output={"latex": conf.latex_prefix + "_start.latex"},
+            param = {"id": conf.id}))
 
 def _ending_latex(workflow, conf):
     attach_back(workflow,
@@ -713,6 +720,7 @@ def _ending_latex(workflow, conf):
 
 def _merge_latex(workflow, conf):
     latex_order = [
+        "_start.latex",
         "_summary_table.latex",
         "_fastqc.latex", "_bowtie.latex", "_macs2.latex", "_macs2_on_sample.latex",
         "_venn.latex", "_cor.latex", "_ceas.latex", "_conserv.latex", "_seqpos.latex",
@@ -822,7 +830,7 @@ def create_workflow(args, conf, step_checker : StepChecker):
     bld.attach_back(ShellCommand(
         "if [ ! -d '{output}' ]; then mkdir -p {output}; fi",
         output=conf.target_dir))
-
+    bld.build(_begin_latex)
     if need_run(1):
         bld.build(_groom_sequencing_files)
 

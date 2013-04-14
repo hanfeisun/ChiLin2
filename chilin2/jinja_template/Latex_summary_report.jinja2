@@ -1,7 +1,7 @@
 %# templat_name['prefix_dataset_id','basic_table','fastqc_check','fastqc_table','fastqc_graph','mapping_check','basic_map_table','mappable_ratio_graph','redundant_ratio_graph','peak_summary_table','DHS_ratio_graph','velcro_ratio_graph','venn_graph','correlation_graph','height_distibution_graph','gene_distibution_graph','conservation_graph']
 %#  ------Prefix-------prefix_dataset_id
 
-%- if qc_report_begin
+%- if section_name == "begin"
 \documentclass[11pt,a4paper]{article}
 \usepackage{tabularx}
 \usepackage[english]{babel}
@@ -356,8 +356,7 @@ For TF we set a QC judgement, if the experiment transcription factor can be dete
 Factor name & Z-score & Hits  & Motif logo \tabularnewline
 \hline
 \BLOCK{ for line in motif_table }
-*\VAR{line.motif|join(' ')} & \VAR{line.Zscore} & \VAR{line.hits} & \includegraphics[angle=0,width=0.28\textwidth]{\VAR{line.logo}} \\
-%#\VAR{line|join(' & ')} \\
+*\VAR{line.factors|join(' ')} & \VAR{line.zscore} & \VAR{line.hits} & \includegraphics[angle=0,width=0.28\textwidth]{\VAR{line.logoImg}} \\
 \hline
 \BLOCK{ endfor }
 \end{tabularx}
