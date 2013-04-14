@@ -2,8 +2,6 @@
 from glob import glob
 
 import os
-import random
-import subprocess
 import sys
 import re
 import argparse
@@ -20,12 +18,13 @@ from chilin2.function_template.qc_fastqc import stat_fastqc, latex_fastqc
 from chilin2.function_template.qc_macs2 import stat_macs2, stat_velcro, stat_dhs, stat_macs2_on_treats, latex_macs2, latex_macs2_on_sample
 from chilin2.function_template.qc_mdseqpos import stat_seqpos, latex_seqpos
 from chilin2.function_template.qc_conservation import stat_conservation, latex_conservation
+from chilin2.function_template.qc_summary_table import latex_summary_table
 from chilin2.function_template.qc_venn import stat_venn, stat_cor, latex_venn, latex_cor
-from chilin2.helpers import latex_end, json_load
+from chilin2.helpers import latex_end
 
 
 ChiLinQC_db = resource_filename("chilin2", "db/ChiLinQC.db")
-r_template = resource_filename("chilin2", "jinja_template/R_culmulative_plot.R.jinja2")
+rlang_template = resource_filename("chilin2", "jinja_template/R_culmulative_plot.R.jinja2")
 latex_template = resource_filename("chilin2", "jinja_template/Latex_summary_report.jinja2")
 plain_template = resource_filename("chilin2", "jinja_template/text_summary_report.jinja2")
 
@@ -164,7 +163,7 @@ def _raw_QC(workflow, conf):
             stat_fastqc,
             input={"db": ChiLinQC_db,
                    "fastqc_summaries": [target + "_fastqc/fastqc_data.txt" for target in conf.sample_targets],
-                   "template": r_template},
+                   "template": rlang_template},
             output={"R": conf.prefix + "_raw_sequence_qc.R",
                     "pdf": conf.prefix + "_raw_sequence_qc.pdf",
                     "json": conf.json_prefix + "_fastqc.json"},
@@ -204,7 +203,7 @@ def _bowtie(workflow, conf):
         PythonCommand(stat_bowtie,
             input={"bowtie_summaries": [t + "_bowtie_summary.txt" for t in conf.sample_targets],
                    "db": ChiLinQC_db,
-                   "template": r_template},
+                   "template": rlang_template},
             output={"json": conf.json_prefix + "_bowtie.json",
                     "R": conf.prefix + "_bowtie.R",
                     "pdf": conf.prefix + "_bowtie.pdf"},
@@ -323,7 +322,7 @@ def _macs2(workflow, conf):
         stat_macs2,
         input={"macs2_peaks_xls": conf.prefix + "_peaks.xls",
                "db": ChiLinQC_db,
-               "template": r_template},
+               "template": rlang_template},
         output={"json": conf.json_prefix + "_macs2.json",
                 "R": conf.prefix + "_macs2.R",
                 "pdf": conf.prefix + "_macs2.pdf"},
@@ -404,7 +403,7 @@ def _macs2_on_sample(workflow, conf):
             stat_macs2_on_treats,
             input={"all_peak_xls": [target + "_peaks.xls" for target in conf.treatment_targets],
                    "db": ChiLinQC_db,
-                   "template": r_template},
+                   "template": rlang_template},
             output={"R": conf.prefix + "_macs2_on_sample.R",
                     "json": conf.json_prefix + "_macs2_on_sample.json",
                     "pdf": conf.prefix + "_macs2_on_sample.pdf"},
@@ -696,58 +695,51 @@ def _seqpos_latex(workflow, conf):
             output={"latex": conf.latex_prefix + "_seqpos.latex"}))
 
 
+def _summary_table_latex(workflow, conf):
+    attach_back(workflow,
+        PythonCommand(
+            latex_summary_table,
+            input={"template": latex_template},
+            output={"latex": conf.latex_prefix + "_summary_table.latex"},
+            param={"conf": conf}))
+
+
 def _ending_latex(workflow, conf):
     attach_back(workflow,
         PythonCommand(
             latex_end,
             input={"template": latex_template},
-            output={"latex": conf.latex_prefix + "_ending.latex"}))
+            output={"latex": conf.latex_prefix + "_ending.latex"}, ))
 
+def _merge_latex(workflow, conf):
+    latex_order = [
+        "_summary_table.latex",
+        "_fastqc.latex", "_bowtie.latex", "_macs2.latex", "_macs2_on_sample.latex",
+        "_venn.latex", "_cor.latex", "_ceas.latex", "_conserv.latex", "_seqpos.latex",
+        "_ending.latex"
+        ]
 
-def latex_summary(workflow, conf):
-    """summary of all criteria by plain text"""
-    summary_table = []
+    latex_list = [conf.latex_prefix + i for i in latex_order]
 
-    exist = os.path.exists
-    if exist(conf.json_prefix + "_fastqc.json"):
-        fastqc = json_load(conf.json_prefix + "_fastqc.json")['stat']
-        for k, v in fastqc.items():
-            summary_table.append(["FastQC", k, v["median"], v["cutoff"], v["judge"]])
+    merge_cmd = attach_back(workflow,
+        ShellCommand(
+            "cat {param[latexes]} > {output}",
+            output=conf.prefix + "_whole.latex"))
+    merge_cmd.param = {"latexes": " ".join(latex_list)}
 
-    if exist(conf.json_prefix + "_bowtie.json"):
-        bowtie = json_load(conf.json_prefix + "_bowtie.json")['stat']
-        for k, v in bowtie.items():
-            summary_table.append(["Unique mappable reads", k, v["mappable_reads"], v["cutoff"], v["judge"]])
-
-    if exist(conf.json_prefix + "_macs2.json"):
-        macs2 = json_load(conf.json_prefix + "_macs2.json")['stat']
-        summary_table.append("High confident peaks", conf.id, macs2["high_conf_peaks"], macs2["cutoff"]["high_conf_peaks"],
-                    macs2["judge"]["high_conf_peaks"])
-
-    if exist(conf.json_prefix + "_macs2_on_sample.json"):
-        macs2_sample = json_load(conf.json_prefix + "_macs2_on_sample.json")['stat']
-        for k, v in macs2_sample.items():
-            summary_table.append(["Unique location rate", k, v["unic_loc_rate"], v["cutoff"]["unic_loc_rate"],
-                                  v["judge"]["unic_loc_rate"]])
-            summary_table.append(["Unique location", k, v["unic_loc"], v["cutoff"]["unic_loc"],
-                v["judge"]["unic_loc"]])
-
-    if exist(conf.json_prefix + "_dhs.json"):
-        dhs = json_load(conf.json_prefix + "_dhs.json")['stat']
-        summary_table.append(["DHS ratio", conf.id, dhs["dhspercentage"], dhs["cutoff"], dhs["judge"]])
-
-    if exist(conf.json_prefix + "_cor.json"):
-        cor = json_load(conf.json_prefix + "_cor.json")['stat']
-        summary_table.append(["Replicates Correlation", conf.id, cor["min_cor"], cor["cutoff"], cor["judge"]])
-    if exist(conf.json_prefix + "_velcro.json"):
-        velcro = json_load(conf.json_prefix + "_velcro.json")['stat']
-        summary_table.append(["non Velro ratio", conf.id, velcro["nonvelcropercentage"], velcro["cutoff"], velcro["judge"]])
-
-    if exist(conf.json_prefix + "_conserv.json"):
-        conserv = json_load(conf.json_prefix + "_conserv.json")['stat']
-        summary_table.append(["Conservation QC", conf.id, "", "",conserv["judge"]])
-    return
-
+def _render_pdf(workflow, conf):
+    attach_back(workflow,
+        ShellCommand(
+            # Somehow the pdflatex has to be invoked twice..
+            "{tool} -output-directory {output[dir]} -jobname={param[name]} {input} \
+            && {tool} -output-directory {output[dir]} -jobname={param[name]} {input}",
+            tool="pdflatex",
+            input=conf.prefix + "_whole.latex",
+            # output[pdf] should use "conf.prefix" to have the absolute path
+            output={"dir": conf.target_dir, "pdf": conf.prefix + "_whole.pdf"},
+            # param[name] should use "conf.id" to avoid using absolute path
+            param={"name": conf.id + "_whole"},
+            name="report"))
 
 def prepare_clean_up(workflow, conf):
     """
@@ -881,8 +873,10 @@ def create_workflow(args, conf, step_checker : StepChecker):
         bld.build(_seqpos)
         bld.build(_seqpos_latex)
 
+    bld.build(_summary_table_latex)
     bld.build(_ending_latex)
-
+    bld.build(_merge_latex)
+    bld.build(_render_pdf)
     if args.clean:
         bld.build(prepare_clean_up)
     return bld.workflow

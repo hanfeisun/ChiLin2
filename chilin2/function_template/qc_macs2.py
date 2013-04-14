@@ -176,7 +176,7 @@ def stat_velcro(input={"macs2_peaks_xls": "", "velcro_peaks": ""}, output={"json
     result_dict = {"stat": {}, "input": input, "output": output, "param": param}
     result_dict["stat"] = peaks_info
     result_dict["stat"]["cutoff"] = 0.9
-    result_dict['stat']["judge"] = "Pass" if (1 - peaks_info['velcropercentage']) >= 0.9 else "Fail"
+    result_dict['stat']["judge"] = "Pass" if (peaks_info['nonvelcropercentage']) >= 0.9 else "Fail"
     with open(output["json"], "w") as f:
         json.dump(result_dict, f, indent=4)
 
