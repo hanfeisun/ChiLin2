@@ -52,6 +52,8 @@ class ChiLinConfig(object):
     def target_dir(self):
         return self.get("Basis", "output")
 
+
+
     @property
     def prefix(self):
         return os.path.join(self.target_dir, self.id)

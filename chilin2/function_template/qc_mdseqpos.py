@@ -57,7 +57,6 @@ def stat_seqpos(input = {"template": "", "seqpos": ""}, output={"latex_section":
 
     for n, _ in enumerate(satisfied_motif_list):
         satisfied_motif_list[n]["logoImg"] = param["prefix"] + satisfied_motif_list[n]["logoImg"]
-        print(satisfied_motif_list)
     result_dict = {"stat": {}, "input": input, "output": output, "param": param}
     result_dict["stat"]["satisfied_motifs"] = satisfied_motif_list
     with open(output["json"], "w") as f:

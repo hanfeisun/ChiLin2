@@ -44,12 +44,6 @@ def parse_args(args=None):
     parser = FriendlyArgumentParser(description=description)
     sub_parsers = parser.add_subparsers(help="sub-command help", dest="sub_command")
 
-    template_parser = sub_parsers.add_parser("gen", help="generate a template of config file",
-        description="ChiLin-gen: A config template generator for ChiLin")
-    template_parser.add_argument("-s", "--species", choices=("hg19", "mm9"), required=True)
-    template_parser.add_argument("-t", dest="atype", choices=("Dnase", "Histone", "TF"), required=True,
-        help="the most important option for ChiLin specify the analysis type and the shiftsize {Dnase: 50, Histone and TF:73} of MACS2")
-
     parser_run = sub_parsers.add_parser("run", help="run pipeline using a config file",
         description="ChiLin-run: Run ChiLin pipeline using a config file")
     parser_run.add_argument("-c", "--config", dest="config", required=True,
@@ -68,6 +62,17 @@ def parse_args(args=None):
     parser_run.add_argument("--resume", dest="resume", action="store_true", default=False)
     parser_run.add_argument("--debug", help="debug mode", action="store_true", default=False)
     parser_run.add_argument("--remove", dest="clean", action="store_true", default=False)
+
+    parser_clean = sub_parsers.add_parser("clean", help="Move result file into a new folder and delete other files",
+        description="ChiLin-run: Run ChiLin pipeline using a config file")
+    parser_clean.add_argument("-c", "--config", dest="config", required=True,
+        help="specify the config file to use", )
+    parser_clean.add_argument("--dry-run", dest="dry_run", action="store_true", default=False)
+    parser_clean.add_argument("-v", "--verbose-level", dest="verbose_level", type=int, default=2,
+        help=argparse.SUPPRESS)
+    parser_clean.add_argument("--resume", dest="resume", action="store_true", default=False, help=argparse.SUPPRESS)
+    parser_clean.add_argument("--allow-dangling", dest="allow_dangling", action="store_true", default=False,
+        help=argparse.SUPPRESS)
     return parser.parse_args(args)
 
 
@@ -703,13 +708,15 @@ def _summary_table_latex(workflow, conf):
             output={"latex": conf.latex_prefix + "_summary_table.latex"},
             param={"conf": conf}))
 
+
 def _begin_latex(workflow, conf):
     attach_back(workflow,
         PythonCommand(
             latex_start,
             input={"template": latex_template},
             output={"latex": conf.latex_prefix + "_start.latex"},
-            param = {"id": conf.id}))
+            param={"id": conf.id}))
+
 
 def _ending_latex(workflow, conf):
     attach_back(workflow,
@@ -718,6 +725,7 @@ def _ending_latex(workflow, conf):
             input={"template": latex_template},
             output={"latex": conf.latex_prefix + "_ending.latex"}, ))
 
+
 def _merge_latex(workflow, conf):
     latex_order = [
         "_start.latex",
@@ -725,7 +733,7 @@ def _merge_latex(workflow, conf):
         "_fastqc.latex", "_bowtie.latex", "_macs2.latex", "_macs2_on_sample.latex",
         "_venn.latex", "_cor.latex", "_ceas.latex", "_conserv.latex", "_seqpos.latex",
         "_ending.latex"
-        ]
+    ]
 
     latex_list = [conf.latex_prefix + i for i in latex_order]
 
@@ -734,6 +742,7 @@ def _merge_latex(workflow, conf):
             "cat {param[latexes]} > {output}",
             output=conf.prefix + "_whole.latex"))
     merge_cmd.param = {"latexes": " ".join(latex_list)}
+
 
 def _render_pdf(workflow, conf):
     attach_back(workflow,
@@ -749,34 +758,39 @@ def _render_pdf(workflow, conf):
             param={"name": conf.id + "_whole"},
             name="report"))
 
+
 def prepare_clean_up(workflow, conf):
     """
     package all the necessary results and delete temporary files
     """
-    bams = glob('*.bam')
-    xls = glob('*.xls')
-    summits = glob('*_summits.bed')
-    peaks = glob('*_peaks.bed')
-    bw = glob('*.bw')
-    png = glob('*.png')
-    cor = glob('*cor*')
-    pdf = glob('*_ceas.pdf')
-    r = glob('*_ceas.R')
-    m = glob('*.zip')
-    su = glob('dataset*.txt')
-    qc = glob('*.tex')
-    qcp = glob('*QC.pdf')
-    fls = [bams, xls, summits, peaks, bw, png, pdf, r, m, cor, su, qc, qcp]
-    folder = conf.target_dir + '/dataset' + conf.id
-    os.system('mkdir %s' % folder)
-    for fs in fls:
-        os.system('cp %s %s' % (' '.join(fs), folder))
-    preservation = os.listdir(".")
-    for f in preservation:
-        if f.startswith("dataset") and os.path.isdir(f):
+    p_list = ['*.bam', '*.xls', '*_summits.bed', '*_peaks.bed', '*.bw',
+              '*.png', '*.pdf', '*.R', '*.zip', '*cor*', 'json', "*summary*",
+              "*seqpos","*fastqc", '*latex']
+
+    p_pattern = [os.path.join(conf.target_dir, p) for p in p_list]
+
+    final_dir = conf.target_dir + '/dataset_' + conf.id
+    attach_back(workflow,
+        ShellCommand("if [ ! -d '{output}' ]; then mkdir -p {output}; fi",
+            output=final_dir))
+
+    for pf in p_pattern:
+        if not glob(pf):
+            print(pf)
             continue
-        else:
-            os.system("rm -r %s" % f)
+        attach_back(workflow,
+            ShellCommand('mv {param[preserve_files]} {output[dir]} \n# Pattern: {param[p_pattern]}',
+                output={"dir": final_dir},
+                param={"preserve_files": " ".join(glob(pf)),
+                       "p_pattern": pf}, ))
+
+    only_files = [os.path.join(conf.target_dir, f) for f in os.listdir(conf.target_dir) if
+                  os.path.isfile(os.path.join(conf.target_dir, f))]
+    for f in only_files:
+        attach_back(
+            workflow,
+            ShellCommand("rm {param[tmp]}",
+                param={"tmp": f}))
 
 
 class StepChecker:
@@ -812,25 +826,37 @@ class ChiLinBuilder:
         attach_back(self.workflow, command)
 
 
-def create_workflow(args, conf, step_checker : StepChecker):
+def create_workflow(args, conf):
     """
     :type conf:ChiLinConfig
     """
-
-
-
     # Whether there are replicates for treatment group
+
+
+    workflow = Workflow(name="Main")
+    bld = ChiLinBuilder(workflow, conf)
+
+    if args.sub_command == "clean":
+        bld.build(prepare_clean_up)
+        return workflow
+
+    if args.skip_step:
+        skipped_steps = [int(i) for i in args.skip_step.split(",")]
+    else:
+        skipped_steps = []
+
+    step_checker = StepChecker(args.start_step, args.end_step, skipped_steps)
+
     have_treat_reps = len(conf.treatment_pairs) >= 2
     has_dhs = conf.get("lib", "dhs")
     has_velcro = conf.get("lib", "velcro")
     need_run = step_checker.need_run
 
-    bld = ChiLinBuilder(Workflow(name="Main"), conf)
-
     bld.attach_back(ShellCommand(
         "if [ ! -d '{output}' ]; then mkdir -p {output}; fi",
         output=conf.target_dir))
     bld.build(_begin_latex)
+
     if need_run(1):
         bld.build(_groom_sequencing_files)
 
@@ -885,9 +911,8 @@ def create_workflow(args, conf, step_checker : StepChecker):
     bld.build(_ending_latex)
     bld.build(_merge_latex)
     bld.build(_render_pdf)
-    if args.clean:
-        bld.build(prepare_clean_up)
-    return bld.workflow
+
+    return workflow
 
 
 def main(args=None):
@@ -895,14 +920,7 @@ def main(args=None):
     print("Arguments:", args)
 
     conf = ChiLinConfig(args.config)
-    if args.skip_step:
-        skipped_steps = [int(i) for i in args.skip_step.split(",")]
-    else:
-        skipped_steps = []
-
-    step_checker = StepChecker(args.start_step, args.end_step, skipped_steps)
-
-    workflow = create_workflow(args, conf, step_checker)
+    workflow = create_workflow(args, conf)
 
     workflow.set_option(
         verbose_level=args.verbose_level,
