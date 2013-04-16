@@ -60,7 +60,6 @@ def parse_args(args=None):
     parser_run.add_argument("--dry-run", dest="dry_run", action="store_true", default=False)
     parser_run.add_argument("--allow-dangling", dest="allow_dangling", action="store_true", default=False)
     parser_run.add_argument("--resume", dest="resume", action="store_true", default=False)
-    parser_run.add_argument("--debug", help="debug mode", action="store_true", default=False)
     parser_run.add_argument("--remove", dest="clean", action="store_true", default=False)
 
     parser_clean = sub_parsers.add_parser("clean", help="Move result file into a new folder and delete other files",
@@ -486,7 +485,8 @@ def _macs2_cor(workflow, conf):
             output={"R": conf.prefix + "_cor.R", "pdf": conf.prefix + "_cor.pdf"},
             param={"wig_correlation_method": "mean",
                    "wig_correlation_min": 2,
-                   "wig_correlation_max": 50},
+                   "wig_correlation_max": 50,
+                   "wig_correlation_step": 10,},
             name="cor_on_bw"))
     cor_on_bw.param["bw"] = " ".join(cor_on_bw.input)
     cor_on_bw.param["rep"] = " ".join([" -l replicate_%s" % (x + 1) for x in range(len(conf.treatment_pairs))])
@@ -671,7 +671,7 @@ def _seqpos(workflow, conf):
             "{tool} -d  -w 600  -p 0.001  -m cistrome.xml  -s {param[species]} {input} {param[version]}",
             "MDSeqPos.py",
             input=conf.prefix + "_summits_topmdfilter.bed",
-            output="results",
+            output={"result_dir": "results"},
             param={"species": "hs", "version": "hg19"}, name="motif finding"))
     mdseqpos.update(param=conf.items("seqpos"))
 
@@ -680,7 +680,8 @@ def _seqpos(workflow, conf):
             "{tool} {input} {output}",
             "mv",
             input="results",
-            output=conf.prefix + "_seqpos",
+            output={"dir": conf.prefix + "_seqpos",
+                    "html": conf.prefix + "_seqpos/" + "mdseqpos_out.html"},
             name="mv seqpos"))
 
     attach_back(workflow,
