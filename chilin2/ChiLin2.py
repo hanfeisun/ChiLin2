@@ -677,8 +677,8 @@ def _seqpos(workflow, conf):
 
     attach_back(workflow,
         ShellCommand(
-            "{tool} {input} {output}",
-            "mv",
+            "{tool} {input} {output[dir]}",
+            "cp",
             input="results",
             output={"dir": conf.prefix + "_seqpos",
                     "html": conf.prefix + "_seqpos/" + "mdseqpos_out.html"},
