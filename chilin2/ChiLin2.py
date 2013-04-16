@@ -767,7 +767,7 @@ def prepare_clean_up(workflow, conf):
     """
     p_list = ['*.bam', '*.xls', '*_summits.bed', '*_peaks.bed', '*.bw',
               '*.png', '*.pdf', '*.R', '*.zip', '*cor*', 'json', "*summary*",
-              "*seqpos","*fastqc", '*latex']
+              "*seqpos","*fastqc", '*latex', "*.conf"]
 
     p_pattern = [os.path.join(conf.target_dir, p) for p in p_list]
 
@@ -780,19 +780,20 @@ def prepare_clean_up(workflow, conf):
         if not glob(pf):
             print(pf)
             continue
-        attach_back(workflow,
+        move = attach_back(workflow,
             ShellCommand('mv {param[preserve_files]} {output[dir]} \n# Pattern: {param[p_pattern]}',
                 output={"dir": final_dir},
                 param={"preserve_files": " ".join(glob(pf)),
                        "p_pattern": pf}, ))
+        move.allow_fail = True
 
-    only_files = [os.path.join(conf.target_dir, f) for f in os.listdir(conf.target_dir) if
-                  os.path.isfile(os.path.join(conf.target_dir, f))]
-    for f in only_files:
-        attach_back(
-            workflow,
-            ShellCommand("rm {param[tmp]}",
-                param={"tmp": f}))
+#    only_files = [os.path.join(conf.target_dir, f) for f in os.listdir(conf.target_dir) if
+#                  os.path.isfile(os.path.join(conf.target_dir, f))]
+#    for f in only_files:
+#        attach_back(
+#            workflow,
+#            ShellCommand("rm {param[tmp]}",
+#                param={"tmp": f}))
 
 
 class StepChecker:
