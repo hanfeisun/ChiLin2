@@ -448,7 +448,7 @@ def _macs2_venn(workflow, conf):
     venn_on_peaks = attach_back(workflow,
         ShellCommand(
             "{tool} -t Overlap_of_Replicates {param[beds]} && \
-            mv venn_diagram.png {output}",
+            cp venn_diagram.png {output}",
             tool="venn_diagram.py",
             input=[target + "_peaks.bed.tmp" for target in conf.treatment_targets],
             output=conf.prefix + "_venn.png", name="venn_diagram"))
@@ -612,8 +612,8 @@ def _conservation(workflow, conf):
         ShellCommand(
             "{tool} -t Conservation_at_summits \
             -d {input[phast]} -l Peak_summits {input[bed]} -w {param[width]} &&\
-            mv tmp.pdf {output[pdf]} && \
-            mv tmp.R {output[R]}",
+            cp tmp.pdf {output[pdf]} && \
+            cp tmp.R {output[R]}",
 
             tool="conservation_plot.py",
             input={"bed": conf.prefix + "_summits_topconserv.bed",
@@ -626,7 +626,7 @@ def _conservation(workflow, conf):
 
     attach_back(workflow,
         ShellCommand(
-            "{tool} -resize 500x500 -density 50  {input[pdf]} {output[pdf]} && mv {input[R]} {output[R]}",
+            "{tool} -resize 500x500 -density 50  {input[pdf]} {output[pdf]} && cp {input[R]} {output[R]}",
             tool="convert", ## width differs histone mark and TF
             input={"pdf": conf.prefix + "_conserv_tmp.pdf",
                    "R": conf.prefix + "_conserv_tmp.R"},
@@ -682,7 +682,7 @@ def _seqpos(workflow, conf):
             input="results",
             output={"dir": conf.prefix + "_seqpos",
                     "html": conf.prefix + "_seqpos/" + "mdseqpos_out.html"},
-            name="mv seqpos"))
+            name="cp seqpos"))
 
     attach_back(workflow,
         PythonCommand(
