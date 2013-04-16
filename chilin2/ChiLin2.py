@@ -742,6 +742,7 @@ def _merge_latex(workflow, conf):
         ShellCommand(
             "cat {param[latexes]} > {output}",
             output=conf.prefix + "_whole.latex"))
+    merge_cmd.allow_fail = True
     merge_cmd.param = {"latexes": " ".join(latex_list)}
 
 
