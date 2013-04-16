@@ -2,7 +2,7 @@ import json
 import sqlite3
 import math
 
-from chilin2.helpers import JinjaTemplateCommand, template_dump, r_exec, json_load, json_dump
+from chilin2.helpers import JinjaTemplateCommand, template_dump, r_exec, json_load, json_dump, underline_to_space
 
 
 def _peaks_parse(input):
@@ -87,7 +87,7 @@ def latex_macs2(input, output, param):
 
     json_dict = json_load(input["json"])
 
-    summary = [json_dict["param"]["id"],
+    summary = [underline_to_space(json_dict["param"]["id"]),
                json_dict["stat"]["qvalue"],
                json_dict["stat"]["totalpeak"],
                json_dict["stat"]["peaksge10"],

@@ -66,7 +66,7 @@ def latex_start(input = {"template": ""}, output = {"latex": ""}, param = {"id":
         name = "end of latex document",
         template = input["template"],
         param = {"section_name": "begin",
-                 "prefix_dataset_id": param["id"],
+                 "prefix_dataset_id": underline_to_space(param["id"]),
                  "render_dump": output["latex"]
         })
 
